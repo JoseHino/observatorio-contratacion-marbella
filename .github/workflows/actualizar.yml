@@ -6,11 +6,6 @@ on:
   schedule:
     - cron: '0 6 25 * *'
   workflow_dispatch:
-    inputs:
-      anios:
-        description: 'Años a redescargar (coma). Vacío = solo el ejercicio en curso.'
-        required: false
-        default: ''
 
 permissions:
   contents: write
@@ -22,7 +17,7 @@ concurrency:
 jobs:
   actualizar:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -30,46 +25,36 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Años a refrescar
-        id: anios
+      - name: Instalar dependencias
         run: |
-          if [ -n "${{ inputs.anios }}" ]; then
-            echo "years=${{ inputs.anios }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "years=$(date -u +%Y)" >> "$GITHUB_OUTPUT"
-          fi
+          pip install --quiet pdfplumber playwright
+          playwright install --with-deps chromium
 
-      # Solo el ejercicio en curso: los años cerrados se reutilizan desde
-      # _raw/cache/, que está versionado. Sin esto habría que bajar 11 GB.
-      - name: Descargar de la PLACSP
-        env:
-          PLACSP_YEARS: ${{ steps.anios.outputs.years }}
-        run: python _scripts/download_placsp.py
+      # Lee la pestaña "Documentos" del perfil del contratante y descarga lo
+      # que aún no esté en _raw/perfil/. Los PDF ya descargados no se vuelven
+      # a pedir, así que una pasada normal solo trae lo nuevo.
+      - name: Descargar los documentos del perfil del contratante
+        run: python _scripts/descargar_perfil.py
 
-      - name: Actualizar códigos CODICE
-        run: python _scripts/codigos.py
-        continue-on-error: true
-
-      - name: Extraer los expedientes de Marbella
-        run: python _scripts/extraer_marbella.py
+      - name: Extraer las tablas de los PDF
+        run: python _scripts/extraer_listados.py
 
       - name: Reconstruir el panel
         run: python _scripts/build_data.py
 
+      # Que la página cargue no significa que haya datos: se exige lienzo en
+      # todas las gráficas, en claro y en oscuro. Si falla, no se publica.
       - name: Comprobar que el panel pinta
-        run: |
-          pip install playwright
-          playwright install --with-deps chromium
-          python _scripts/verificar.py
+        run: python _scripts/verificar.py
 
       - name: Publicar si hay cambios
         run: |
           git config user.name  'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add observatorio/data/data.js csv contratos_marbella.json _raw/cache
+          git add observatorio/data/data.js csv listados_marbella.json _raw/perfil
           if git diff --cached --quiet; then
-            echo 'La Plataforma no ha publicado nada nuevo: no se toca el repositorio.'
+            echo 'El Ayuntamiento no ha publicado nada nuevo: no se toca el repositorio.'
           else
-            git commit -m "Actualización automática de $(date -u +%Y-%m-%d) desde la PLACSP"
+            git commit -m "Actualización automática de $(date -u +%Y-%m-%d) desde el perfil del contratante"
             git push
           fi

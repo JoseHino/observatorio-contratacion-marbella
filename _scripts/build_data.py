@@ -1,19 +1,21 @@
-"""Agrega los datos del observatorio y escribe observatorio/data/data.js.
+"""Agrega los listados del perfil del contratante y escribe observatorio/data/data.js.
 
-FUENTE UNICA: los datos abiertos de la Plataforma de Contratacion del Sector
-Publico, filtrados por el organo de contratacion del Ayuntamiento de Marbella.
-El fichero de la PLACSP trae las dos clases y hay que separarlas:
+FUENTE UNICA: los documentos que el Ayuntamiento de Marbella publica en la
+pestana "Documentos" de su perfil del contratante en la PLACSP, en cumplimiento
+del articulo 63 de la LCSP. Los descarga descargar_perfil.py y los convierte a
+datos extraer_listados.py.
 
-  * fuente="mayores" -> licitacionesPerfilesContratanteCompleto3 (sindicacion_643)
-  * fuente="menores" -> contratosMenoresPerfilesContratantes  (sindicacion_1143)
+  * mayores     -> Listado Anual de Contratos celebrados (indicador n 48).
+                   Importes SIN IVA. 2019-2024.
+  * menores     -> Relaciones trimestrales de contratos menores (y el listado
+                   anual en los ejercicios sin trimestrales). CON IVA. 2018-2025.
+  * modificados -> Relacion de Modificados (indicador n 50). SIN IVA. 2019-2024.
 
-No se usa ningun listado local del Ayuntamiento: todo lo que entra aqui se
-puede volver a descargar de la Plataforma, que es lo que permite que el
-observatorio se actualice solo cada mes.
-
-Los importes van en EUROS CON IVA salvo donde se diga; la PLACSP publica las
-dos bases, asi que la comparacion presupuesto/adjudicacion se hace sin IVA,
-que es donde ambas magnitudes son homogeneas.
+AVISO DE BASE IMPONIBLE: los listados de mayores publican el importe SIN IVA y
+los de menores CON IVA, y ninguno de los dos incluye la otra base. Por eso el
+observatorio NO da ninguna cifra que sume mayores y menores en euros: se
+presentan siempre por separado, con su base declarada. El numero de
+expedientes si es sumable, y ahi si se agregan.
 """
 import json
 import pathlib
@@ -28,272 +30,226 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT = ROOT / "observatorio" / "data" / "data.js"
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
-ANIO_MIN = 2018          # la LCSP 9/2017 obliga a publicar en perfil desde 03/2018
-ANIO_MAX = datetime.now().year
-ANIOS = list(range(ANIO_MIN, ANIO_MAX + 1))
+D = json.loads((ROOT / "listados_marbella.json").read_text(encoding="utf-8"))
+MAY, MEN, MOD = D["mayores"], D["menores"], D["modificados"]
+PROC = D["procedencia"]
 
-MAYORES = json.loads((ROOT / "contratos_marbella.json").read_text(encoding="utf-8"))
-
-_EN_RANGO = [r for r in MAYORES if r.get("anio") and ANIO_MIN <= r["anio"] <= ANIO_MAX]
-
-# El fichero de la PLACSP trae las dos clases: separarlas o los menores se
-# cuentan como mayores y el panel miente por partida doble.
-D = [r for r in _EN_RANGO if r.get("fuente") == "mayores"]
-PLACSP_MEN = [r for r in _EN_RANGO if r.get("fuente") == "menores"]
-ANIOS_PLACSP_MEN = sorted({r["anio"] for r in PLACSP_MEN})
+ANIOS_MAY = sorted({r["anio"] for r in MAY if r["anio"]})
+ANIOS_MEN = sorted({r["anio"] for r in MEN if r["anio"]})
+ANIOS_MOD = sorted({r["anio"] for r in MOD if r["anio"]})
+ANIOS = sorted(set(ANIOS_MAY) | set(ANIOS_MEN))
 
 
-# --------------------------------------------------------------- importes ---
-def adj_con_iva(r):
-    """Importe adjudicado CON IVA; si el expediente no esta adjudicado todavia,
-    el presupuesto base de licitacion, que es la mejor estimacion publicada."""
-    v = [a["importe_con_iva"] for a in r["adjudicaciones"] if a.get("importe_con_iva")]
-    if v:
-        return round(sum(v), 2)
-    return r.get("presupuesto_con_iva") or 0
+def por_anio(filas, anios):
+    d = defaultdict(list)
+    for r in filas:
+        d[r["anio"]].append(r)
+    return [d.get(a, []) for a in anios]
 
 
-def adj_sin_iva(r):
-    return r.get("importe_adjudicacion") or r.get("presupuesto_sin_iva") or 0
+def serie(filas, anios, f):
+    return [f(rs) for rs in por_anio(filas, anios)]
 
 
-def serie(f, datos=None):
-    por = defaultdict(list)
-    for r in (D if datos is None else datos):
-        por[r["anio"]].append(r)
-    return [f(por.get(a, [])) for a in ANIOS]
+def suma(campo):
+    return lambda rs: round(sum(r.get(campo) or 0 for r in rs), 2) or None
 
 
-def placsp_men_n(anio):
-    return sum(1 for r in PLACSP_MEN if r["anio"] == anio) or None
+def cuenta(rs):
+    return len(rs) or None
 
 
-def placsp_men_imp(anio):
-    s_ = sum(adj_con_iva(r) for r in PLACSP_MEN if r["anio"] == anio)
-    return round(s_, 2) or None
+def limpia(s):
+    return " ".join(str(s or "").split())
 
 
-menores_n = placsp_men_n
-menores_imp = placsp_men_imp
+# La fecha de publicacion viene como "19 Aug 2026", con el mes en ingles. Sin
+# convertirla, ordenar por texto dice que el ultimo documento es de diciembre.
+MESES = {m: i for i, m in enumerate(
+    "jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
 
 
-# --------------------------------------------------------------- resumen ---
+def fecha_pub(s):
+    p = limpia(s).split()
+    if len(p) == 3 and p[1][:3].lower() in MESES and p[0].isdigit():
+        return f"{p[2]}-{MESES[p[1][:3].lower()]:02d}-{int(p[0]):02d}"
+    return ""
+
+
+def titulo_empresa(s):
+    """Los nombres vienen tal cual los publica el Ayuntamiento: la misma
+    empresa aparece con grafias distintas. Se normaliza lo evidente (espacios,
+    puntuacion final, mayusculas) y nada mas: fusionar por parecido seria
+    inventar adjudicatarios."""
+    return limpia(s).rstrip(" .,;").upper()
+
+
+# ===========================================================  PANORAMA  ====
 resumen = {
     "x": ANIOS,
-    "n_mayores": serie(len),
-    "n_menores": [menores_n(a) for a in ANIOS],
-    "imp_mayores": serie(lambda rs: round(sum(adj_con_iva(r) for r in rs), 2)),
-    "imp_menores": [menores_imp(a) for a in ANIOS],
-    "presupuesto": serie(lambda rs: round(sum(r.get("presupuesto_con_iva") or 0 for r in rs), 2)),
-    "adjudicado": serie(lambda rs: round(sum(adj_con_iva(r) for r in rs), 2)),
-    # peso del contrato menor sobre el conjunto de la contratacion municipal
+    "n_mayores": serie(MAY, ANIOS, cuenta),
+    "n_menores": serie(MEN, ANIOS, cuenta),
+    "imp_mayores": serie(MAY, ANIOS, suma("importe_adjudicacion")),
+    "lic_mayores": serie(MAY, ANIOS, suma("importe_licitacion")),
+    "imp_menores": serie(MEN, ANIOS, suma("importe_con_iva")),
     "pct_menores_num": [],
-    "pct_menores_imp": [],
 }
 for i, a in enumerate(ANIOS):
     nm, nM = resumen["n_menores"][i], resumen["n_mayores"][i]
-    im, iM = resumen["imp_menores"][i], resumen["imp_mayores"][i]
-    resumen["pct_menores_num"].append(round(nm / (nm + nM) * 100, 1) if nm and (nm + nM) else None)
-    resumen["pct_menores_imp"].append(round(im / (im + iM) * 100, 1) if im and (im + iM) else None)
+    resumen["pct_menores_num"].append(
+        round(nm / (nm + nM) * 100, 1) if nm and nM else None)
 
-# ------------------------------------------------------- mayores: tipos ----
-TIPOS = [t for t, _ in Counter(r["tipo"] for r in D if r["tipo"]).most_common(6)]
-tipos = {
-    "x": ANIOS, "nombres": TIPOS,
-    "n": [serie(lambda rs, t=t: sum(1 for r in rs if r["tipo"] == t)) for t in TIPOS],
-    "importe": [serie(lambda rs, t=t: round(sum(adj_con_iva(r) for r in rs if r["tipo"] == t), 2)) for t in TIPOS],
+# Baja de adjudicacion: solo mayores, y solo donde constan las dos cifras.
+baja = []
+for rs in por_anio(MAY, ANIOS):
+    par = [(r["importe_licitacion"], r["importe_adjudicacion"]) for r in rs
+           if r.get("importe_licitacion") and r.get("importe_adjudicacion")]
+    if not par:
+        baja.append(None)
+        continue
+    lic, adj = sum(p for p, _ in par), sum(a for _, a in par)
+    baja.append(round((lic - adj) / lic * 100, 1) if lic else None)
+resumen["baja"] = baja
+
+# ============================================================  MAYORES  ====
+TIPOS_MAY = [t for t, _ in Counter(limpia(r["tipo"]).title() for r in MAY
+                                   if limpia(r["tipo"])).most_common(6)]
+PROCS = [p for p, _ in Counter(limpia(r["procedimiento"]).title() for r in MAY
+                               if limpia(r["procedimiento"])).most_common(6)]
+
+
+def reparto(filas, anios, campo, valores):
+    return [serie(filas, anios,
+                  lambda rs, v=v: sum(1 for r in rs
+                                      if limpia(r[campo]).title() == v) or None)
+            for v in valores]
+
+
+def reparto_imp(filas, anios, campo, valores, imp):
+    return [serie(filas, anios,
+                  lambda rs, v=v: round(sum(r.get(imp) or 0 for r in rs
+                                            if limpia(r[campo]).title() == v), 2) or None)
+            for v in valores]
+
+
+mayores = {
+    "x": ANIOS_MAY,
+    "tipos": TIPOS_MAY,
+    "n_tipo": reparto(MAY, ANIOS_MAY, "tipo", TIPOS_MAY),
+    "imp_tipo": reparto_imp(MAY, ANIOS_MAY, "tipo", TIPOS_MAY, "importe_adjudicacion"),
+    "procedimientos": PROCS,
+    "n_proc": reparto(MAY, ANIOS_MAY, "procedimiento", PROCS),
+    "imp_proc": reparto_imp(MAY, ANIOS_MAY, "procedimiento", PROCS, "importe_adjudicacion"),
+    "licitacion": serie(MAY, ANIOS_MAY, suma("importe_licitacion")),
+    "adjudicado": serie(MAY, ANIOS_MAY, suma("importe_adjudicacion")),
+    "importe_medio": [],
+    "n_lotes": sum(1 for r in MAY if limpia(r.get("lote"))),
 }
+for rs in por_anio(MAY, ANIOS_MAY):
+    v = [r["importe_adjudicacion"] for r in rs if r.get("importe_adjudicacion")]
+    mayores["importe_medio"].append(round(sum(v) / len(v), 2) if v else None)
 
-# ---------------------------------------------- mayores: procedimientos ----
-cp_n, cp_i = Counter(), defaultdict(float)
-for r in D:
-    p = r["procedimiento"] or "Sin especificar"
-    cp_n[p] += 1
-    cp_i[p] += adj_con_iva(r)
-PROCS = [p for p, _ in cp_n.most_common(8)]
-procedimientos = {
-    "x": PROCS,
-    "n": [cp_n[p] for p in PROCS],
-    "importe": [round(cp_i[p], 2) for p in PROCS],
-    "por_anio": {
-        "x": ANIOS, "nombres": PROCS[:6],
-        "n": [serie(lambda rs, p=p: sum(1 for r in rs if (r["procedimiento"] or "Sin especificar") == p))
-              for p in PROCS[:6]],
-    },
-}
+# =========================================================  COMPETENCIA  ===
+# El n de licitadores solo esta relleno en parte de los expedientes: los
+# indicadores se calculan sobre los informados y se publica cuantos son.
+competencia = {"x": ANIOS_MAY, "media": [], "pct_una": [],
+               "informados": [], "pct_informados": []}
+for rs in por_anio(MAY, ANIOS_MAY):
+    v = [r["n_licitadores"] for r in rs
+         if isinstance(r.get("n_licitadores"), int) and r["n_licitadores"] > 0]
+    competencia["media"].append(round(sum(v) / len(v), 1) if v else None)
+    competencia["pct_una"].append(
+        round(sum(1 for x in v if x == 1) / len(v) * 100, 1) if v else None)
+    competencia["informados"].append(len(v) or None)
+    competencia["pct_informados"].append(round(len(v) / len(rs) * 100, 1) if rs else None)
 
-es_n = Counter(r["estado"] or "Sin estado" for r in D)
-estados = {"x": [e for e, _ in es_n.most_common()], "n": [n for _, n in es_n.most_common()]}
-
-# ------------------------------------------------------------- menores -----
-MEN_TIPOS = [t for t, _ in Counter(r["tipo"] for r in PLACSP_MEN if r["tipo"]).most_common(4)]
-ANIOS_MEN = [a for a in ANIOS if a in ANIOS_PLACSP_MEN]
-
-
-def men_tipo(anio, tipo, seccion):
-    filas = [r for r in PLACSP_MEN if r["anio"] == anio and r["tipo"] == tipo]
-    if not filas:
-        return None
-    return round(sum(adj_con_iva(r) for r in filas), 2) if seccion == "importe" else len(filas)
-
-
-def trimestre(r):
-    """Trimestre de la adjudicacion. Sin fecha no hay trimestre: no se inventa."""
-    f = r.get("fecha_adjudicacion") or ""
-    if len(f) >= 7 and f[5:7].isdigit():
-        return (int(f[5:7]) - 1) // 3
-    return None
-
-
-def men_trim(anio, seccion):
-    out = [0, 0, 0, 0]
-    visto = False
-    for r in PLACSP_MEN:
-        if r["anio"] != anio:
-            continue
-        t = trimestre(r)
-        if t is None:
-            continue
-        visto = True
-        out[t] += 1 if seccion == "n" else adj_con_iva(r)
-    if not visto:
-        return [None] * 4
-    return [round(v, 2) for v in out] if seccion == "importe" else out
-
-
+# ============================================================  MENORES  ====
+TIPOS_MEN = [t for t, _ in Counter(limpia(r["tipo"]).title() for r in MEN
+                                   if limpia(r["tipo"])).most_common(4)]
 menores = {
     "x": ANIOS_MEN,
-    "nombres": MEN_TIPOS,
-    "n": [[men_tipo(a, t, "n") for a in ANIOS_MEN] for t in MEN_TIPOS],
-    "importe": [[men_tipo(a, t, "importe") for a in ANIOS_MEN] for t in MEN_TIPOS],
-    "trimestres": {
-        "x": ["T1", "T2", "T3", "T4"],
-        "anios": ANIOS_MEN,
-        "importe": [men_trim(a, "importe") for a in ANIOS_MEN],
-        "n": [men_trim(a, "n") for a in ANIOS_MEN],
-    },
-    "importe_medio": [
-        round(placsp_men_imp(a) / placsp_men_n(a), 2) if placsp_men_n(a) and placsp_men_imp(a) else None
-        for a in ANIOS_MEN
-    ],
-    "n_detalle": len(PLACSP_MEN),
-    "sin_fecha": sum(1 for r in PLACSP_MEN if trimestre(r) is None),
+    "tipos": TIPOS_MEN,
+    "n_tipo": reparto(MEN, ANIOS_MEN, "tipo", TIPOS_MEN),
+    "imp_tipo": reparto_imp(MEN, ANIOS_MEN, "tipo", TIPOS_MEN, "importe_con_iva"),
+    "importe_medio": [],
+    "trimestres": {"x": ["T1", "T2", "T3", "T4"], "anios": [], "n": [], "importe": []},
+}
+for rs in por_anio(MEN, ANIOS_MEN):
+    v = [r["importe_con_iva"] for r in rs if r.get("importe_con_iva")]
+    menores["importe_medio"].append(round(sum(v) / len(v), 2) if v else None)
+
+# El trimestre solo existe donde hay relacion trimestral publicada.
+for a in ANIOS_MEN:
+    rs = [r for r in MEN if r["anio"] == a and r.get("trimestre")]
+    if not rs:
+        continue
+    n, imp = [0, 0, 0, 0], [0.0, 0.0, 0.0, 0.0]
+    for r in rs:
+        t = r["trimestre"] - 1
+        n[t] += 1
+        imp[t] += r.get("importe_con_iva") or 0
+    menores["trimestres"]["anios"].append(a)
+    menores["trimestres"]["n"].append(n)
+    menores["trimestres"]["importe"].append([round(x, 2) for x in imp])
+
+# ========================================================  MODIFICADOS  ====
+modificados = {
+    "x": ANIOS_MOD,
+    "n": serie(MOD, ANIOS_MOD, cuenta),
+    "importe": serie(MOD, ANIOS_MOD, suma("importe_modificacion")),
+    "pct_sobre_adjudicado": [],
+}
+adj_may = dict(zip(ANIOS_MAY, mayores["adjudicado"]))
+for i, a in enumerate(ANIOS_MOD):
+    imp, base = modificados["importe"][i], adj_may.get(a)
+    modificados["pct_sobre_adjudicado"].append(
+        round(imp / base * 100, 2) if imp and base else None)
+
+top_mod = sorted([r for r in MOD if r.get("importe_modificacion")],
+                 key=lambda r: -r["importe_modificacion"])[:12]
+modificados["top"] = {
+    "x": [f"{limpia(r['expediente'])} · {r['anio']}" for r in top_mod][::-1],
+    "v": [r["importe_modificacion"] for r in top_mod][::-1],
 }
 
-# -------------------------------------------------------- adjudicatarios ---
-emp_i, emp_n = defaultdict(float), Counter()
-emp_men_i, emp_men_n = defaultdict(float), Counter()
-for r in D:
-    for a in r["adjudicaciones"]:
-        nom = (a.get("adjudicatario") or "").strip()
-        if nom:
-            emp_i[nom] += a.get("importe_con_iva") or 0
-            emp_n[nom] += 1
-for r in PLACSP_MEN:
-    for a in r["adjudicaciones"]:
-        nom = (a.get("adjudicatario") or "").strip()
-        if nom:
-            emp_men_i[nom] += a.get("importe_con_iva") or 0
-            emp_men_n[nom] += 1
+# ======================================================  ADJUDICATARIOS  ===
+# Mayores y menores NO se suman en euros (bases de IVA distintas): dos
+# rankings separados y un recuento conjunto de expedientes, que si es sumable.
+def ranking(filas, imp, n=15):
+    tot_i, tot_n = defaultdict(float), Counter()
+    for r in filas:
+        nom = titulo_empresa(r.get("adjudicatario"))
+        if not nom:
+            continue
+        tot_i[nom] += r.get(imp) or 0
+        tot_n[nom] += 1
+    top = sorted(tot_i.items(), key=lambda kv: -kv[1])[:n]
+    return ({"x": [k for k, _ in top][::-1], "v": [round(v, 2) for _, v in top][::-1]},
+            tot_i, tot_n)
 
-todos_i = defaultdict(float)
-todos_n = Counter()
-for d_, n_ in ((emp_i, emp_n), (emp_men_i, emp_men_n)):
-    for k, v in d_.items():
-        todos_i[k] += v
-    todos_n.update(n_)
 
-top_imp = sorted(todos_i.items(), key=lambda kv: -kv[1])[:15]
-top_num = todos_n.most_common(15)
-total_emp = sum(todos_i.values()) or 1
+top_may, emp_may_i, emp_may_n = ranking(MAY, "importe_adjudicacion")
+top_men, emp_men_i, emp_men_n = ranking(MEN, "importe_con_iva")
+n_conjunto = Counter()
+n_conjunto.update(emp_may_n)
+n_conjunto.update(emp_men_n)
+top_num = n_conjunto.most_common(15)
+
 empresas = {
-    "top_importe": {"x": [n for n, _ in top_imp][::-1], "v": [round(v, 2) for _, v in top_imp][::-1]},
-    "top_numero": {"x": [n for n, _ in top_num][::-1], "v": [v for _, v in top_num][::-1]},
-    "top_menores": {
-        "x": [n for n, _ in sorted(emp_men_i.items(), key=lambda kv: -kv[1])[:15]][::-1],
-        "v": [round(v, 2) for _, v in sorted(emp_men_i.items(), key=lambda kv: -kv[1])[:15]][::-1],
-    },
-    "n_distintas": len(todos_i),
-    "n_solo_mayores": len(emp_i),
+    "top_mayores": top_may,
+    "top_menores": top_men,
+    "top_numero": {"x": [k for k, _ in top_num][::-1], "v": [v for _, v in top_num][::-1]},
+    "n_distintas": len(set(emp_may_i) | set(emp_men_i)),
+    "n_solo_mayores": len(emp_may_i),
     "n_solo_menores": len(emp_men_i),
-    "concentracion": round(sum(v for _, v in top_imp[:10]) / total_emp * 100, 1),
-    "n_con_adjudicatario": sum(1 for r in D if any(a.get("adjudicatario") for a in r["adjudicaciones"])),
+    "n_en_ambos": len(set(emp_may_i) & set(emp_men_i)),
+    "concentracion_may": round(
+        sum(v for _, v in sorted(emp_may_i.items(), key=lambda kv: -kv[1])[:10])
+        / (sum(emp_may_i.values()) or 1) * 100, 1),
 }
 
-# ------------------------------------------------------------------ CPV ----
-CPV_DIV = {
-    "03": "Agricultura y pesca", "09": "Energía y combustibles", "14": "Minería y minerales",
-    "15": "Alimentación y bebidas", "16": "Maquinaria agrícola", "18": "Vestuario y calzado",
-    "19": "Cuero y textiles", "22": "Impresos y publicaciones", "24": "Productos químicos",
-    "30": "Equipos informáticos y de oficina", "31": "Material eléctrico", "32": "Radio, TV y telecomunicaciones",
-    "33": "Equipos médicos y farmacia", "34": "Vehículos y transporte", "35": "Seguridad y defensa",
-    "37": "Instrumentos musicales, deporte y juegos", "38": "Equipos de laboratorio y precisión",
-    "39": "Mobiliario y limpieza", "41": "Agua", "42": "Maquinaria industrial",
-    "43": "Maquinaria de obra y minería", "44": "Materiales de construcción", "45": "Obras de construcción",
-    "48": "Software", "50": "Reparación y mantenimiento", "51": "Instalación de equipos",
-    "55": "Hostelería y restauración", "60": "Transporte", "63": "Servicios auxiliares de transporte",
-    "64": "Correos y telecomunicaciones", "65": "Suministros públicos", "66": "Servicios financieros y seguros",
-    "70": "Servicios inmobiliarios", "71": "Arquitectura, ingeniería y urbanismo",
-    "72": "Servicios TI y consultoría", "73": "I+D", "75": "Administración pública y defensa",
-    "76": "Servicios petrolíferos y gasísticos", "77": "Agricultura, silvicultura y jardinería",
-    "79": "Servicios de empresa y jurídicos", "80": "Educación y formación", "85": "Salud y servicios sociales",
-    "90": "Saneamiento y medio ambiente", "92": "Cultura, ocio y deporte", "98": "Otros servicios",
-}
-cpv_i, cpv_n = defaultdict(float), Counter()
-for r in D:
-    nom = CPV_DIV.get((r["cpv"][0][:2] if r["cpv"] else ""), "Otras materias")
-    cpv_i[nom] += adj_con_iva(r)
-    cpv_n[nom] += 1
-top_cpv = sorted(cpv_i.items(), key=lambda kv: -kv[1])[:12]
-cpv = {
-    "x": [n for n, _ in top_cpv][::-1],
-    "importe": [round(v, 2) for _, v in top_cpv][::-1],
-    "n": [cpv_n[n] for n, _ in top_cpv][::-1],
-}
-
-
-# ------------------------------------------------------------ competencia --
-def ofertas_de(r):
-    v = [a["n_ofertas"] for a in r["adjudicaciones"] if a.get("n_ofertas")]
-    return sum(v) if v else None
-
-
-def media_ofertas(rs):
-    v = [ofertas_de(r) for r in rs if ofertas_de(r)]
-    return round(sum(v) / len(v), 2) if v else None
-
-
-def pct_una_oferta(rs):
-    v = [ofertas_de(r) for r in rs if ofertas_de(r)]
-    return round(sum(1 for x in v if x == 1) / len(v) * 100, 1) if v else None
-
-
-def baja_media(rs):
-    """Baja de adjudicacion, agregando importes (no promediando porcentajes),
-    en euros SIN IVA que es donde ambas magnitudes son comparables."""
-    par = [(r["presupuesto_sin_iva"], r["importe_adjudicacion"]) for r in rs
-           if r.get("presupuesto_sin_iva") and r.get("importe_adjudicacion")
-           and 0 < r["importe_adjudicacion"] <= r["presupuesto_sin_iva"] * 1.5]
-    if not par:
-        return None
-    pres, adj = sum(p for p, _ in par), sum(a for _, a in par)
-    return round((pres - adj) / pres * 100, 1) if pres else None
-
-
-def n_informados(rs):
-    return sum(1 for r in rs if ofertas_de(r)) or None
-
-
-competencia = {
-    "x": ANIOS,
-    "media_ofertas": serie(media_ofertas),
-    "pct_una_oferta": serie(pct_una_oferta),
-    "baja_media": serie(baja_media),
-    "n_informados": serie(n_informados),
-}
-
-# ------------------------------------------------------- indice de busqueda -
-CAMPOS = ["a", "f", "ex", "ob", "ti", "pr", "es", "adj", "nif", "imp", "pre", "fa", "or", "cp", "url"]
+# ==========================================================  BUSCADOR  =====
+CAMPOS = ["a", "cl", "ex", "ob", "ti", "pr", "adj", "nif", "imp", "lic", "f", "doc", "url"]
 
 
 def norm(s):
@@ -302,74 +258,70 @@ def norm(s):
 
 
 filas = []
-for r in D:
-    adjs = sorted({a["adjudicatario"] for a in r["adjudicaciones"] if a.get("adjudicatario")})
-    nifs = sorted({a["nif_adjudicatario"] for a in r["adjudicaciones"] if a.get("nif_adjudicatario")})
-    filas.append([
-        r["anio"], "m", r["expediente"] or "", (r["objeto"] or "")[:400],
-        r["tipo"] or "", r["procedimiento"] or "", r["estado"] or "",
-        "; ".join(adjs), "; ".join(nifs),
-        round(adj_con_iva(r), 2) or None, r.get("presupuesto_con_iva"),
-        r.get("fecha_adjudicacion") or "", r["organo"] or "",
-        (r["cpv_desc"][0] if r.get("cpv_desc") else ""), r.get("enlace") or "",
-    ])
-# Los menores se cogen de la PLACSP en los anos en que esta los publica (traen
-# ficha) y del listado municipal en los anos en que no (2020-2021). Nunca de
-# los dos a la vez: serian el mismo contrato dos veces.
-for r in PLACSP_MEN:
-    adjs = sorted({a["adjudicatario"] for a in r["adjudicaciones"] if a.get("adjudicatario")})
-    nifs = sorted({a["nif_adjudicatario"] for a in r["adjudicaciones"] if a.get("nif_adjudicatario")})
-    filas.append([
-        r["anio"], "M", r["expediente"] or "", (r["objeto"] or "")[:400],
-        r["tipo"] or "", "Contrato menor", r["estado"] or "Adjudicado",
-        "; ".join(adjs), "; ".join(nifs),
-        round(adj_con_iva(r), 2) or None, r.get("presupuesto_con_iva"),
-        r.get("fecha_adjudicacion") or "", r["organo"] or "",
-        (r["cpv_desc"][0] if r.get("cpv_desc") else ""), r.get("enlace") or "",
-    ])
-filas.sort(key=lambda f: (-(f[0] or 0), f[2] or ""))
-claves = [norm(" ".join(str(f[i] or "") for i in (2, 3, 7, 8, 12, 13))) for f in filas]
+for r in MAY:
+    filas.append([r["anio"], "m", limpia(r["expediente"]), limpia(r["objeto"])[:400],
+                  limpia(r["tipo"]).title(), limpia(r["procedimiento"]).title(),
+                  limpia(r["adjudicatario"]), limpia(r.get("nif_adjudicatario")),
+                  r.get("importe_adjudicacion"), r.get("importe_licitacion"),
+                  r.get("fecha_formalizacion") or "", r["documento"], r["url_documento"]])
+for r in MEN:
+    ref = limpia(r["expediente"]) or limpia(r.get("n_contrato"))
+    filas.append([r["anio"], "M", ref, limpia(r["objeto"])[:400],
+                  limpia(r["tipo"]).title(), "Contrato menor",
+                  limpia(r["adjudicatario"]), limpia(r.get("nif_adjudicatario")),
+                  r.get("importe_con_iva"), None,
+                  "", r["documento"], r["url_documento"]])
+for r in MOD:
+    filas.append([r["anio"], "x", limpia(r["expediente"]), limpia(r["objeto"])[:400],
+                  limpia(r["tipo"]).title(), "Modificación",
+                  limpia(r["adjudicatario"]), limpia(r.get("nif_adjudicatario")),
+                  r.get("importe_modificacion"), None,
+                  r.get("fecha_formalizacion") or "", r["documento"], r["url_documento"]])
 
-# ------------------------------------------------------------------ meta ---
-imp_may = round(sum(adj_con_iva(r) for r in D), 2)
-imp_men = round(sum(v for v in resumen["imp_menores"] if v), 2)
+filas.sort(key=lambda f: (-(f[0] or 0), f[2] or ""))
+claves = [norm(" ".join(str(f[i] or "") for i in (2, 3, 6, 7))) for f in filas]
+
+# ==============================================================  META  =====
 meta = {
     "municipio": "Marbella",
     "entidad": "Ayuntamiento de Marbella",
     "nif": "P2906900B",
     "actualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    "n_expedientes": len(D) + len(PLACSP_MEN),
-    "n_mayores": len(D),
-    "n_menores": len(PLACSP_MEN),
-    "n_menores_placsp": len(PLACSP_MEN),
-    "anio_min_menores_placsp": min(ANIOS_PLACSP_MEN) if ANIOS_PLACSP_MEN else None,
-    "anio_min": ANIO_MIN,
-    "anio_max": ANIO_MAX,
-    "anio_min_menores": min(ANIOS_PLACSP_MEN) if ANIOS_PLACSP_MEN else None,
-    "importe_total": round(imp_may + imp_men, 2),
-    "importe_mayores": imp_may,
-    "importe_menores": imp_men,
-    "ultimo_periodo": max((r["actualizado"][:10] for r in D if r.get("actualizado")), default=""),
-    "organos": [o for o, _ in Counter(r["organo"] for r in D if r["organo"]).most_common()],
+    "n_mayores": len(MAY),
+    "n_menores": len(MEN),
+    "n_modificados": len(MOD),
+    "n_expedientes": len(MAY) + len(MEN),
+    "anio_min": min(ANIOS), "anio_max": max(ANIOS),
+    "anio_min_may": min(ANIOS_MAY), "anio_max_may": max(ANIOS_MAY),
+    "anio_min_men": min(ANIOS_MEN), "anio_max_men": max(ANIOS_MEN),
+    "anio_min_mod": min(ANIOS_MOD), "anio_max_mod": max(ANIOS_MOD),
+    "imp_mayores": round(sum(r.get("importe_adjudicacion") or 0 for r in MAY), 2),
+    "imp_menores": round(sum(r.get("importe_con_iva") or 0 for r in MEN), 2),
+    "imp_modificados": round(sum(r.get("importe_modificacion") or 0 for r in MOD), 2),
+    "n_documentos": len(PROC),
+    "ultimo_documento": max((fecha_pub(d["publicado"]) for d in PROC), default=""),
+    "documentos": sorted(
+        ({"clase": d["clase"], "anio": d["anio"], "trimestre": d["trimestre"],
+          "titulo": d["titulo"], "publicado": fecha_pub(d["publicado"]),
+          "url": d["url"], "filas": d["filas"]} for d in PROC),
+        key=lambda d: (d["clase"], d["anio"] or 0, d["trimestre"] or 0)),
 }
 
 payload = {
-    "meta": meta, "resumen": resumen, "tipos": tipos, "procedimientos": procedimientos,
-    "estados": estados, "menores": menores, "empresas": empresas, "cpv": cpv,
-    "competencia": competencia,
+    "meta": meta, "resumen": resumen, "mayores": mayores, "menores": menores,
+    "modificados": modificados, "competencia": competencia, "empresas": empresas,
     "busqueda": {"campos": CAMPOS, "filas": filas, "claves": claves},
 }
 
 OUT.write_text(
     "/* Generado por _scripts/build_data.py — no editar a mano. */\n"
     "window.DATOS = " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ";\n",
-    encoding="utf-8",
-)
+    encoding="utf-8")
 
-print(f"mayores (PLACSP)        : {len(D)}  ·  {imp_may:,.0f} € con IVA")
-print(f"menores (PLACSP)        : {len(PLACSP_MEN)}  ·  desde {meta['anio_min_menores_placsp']}"
-      f"  ·  {imp_men:,.0f} € con IVA")
-print(f"periodo                 : {ANIO_MIN}-{ANIO_MAX} (menores desde {meta['anio_min_menores']})")
+print(f"mayores      : {len(MAY):5d}  {min(ANIOS_MAY)}-{max(ANIOS_MAY)}  ·  {meta['imp_mayores']:,.0f} € sin IVA")
+print(f"menores      : {len(MEN):5d}  {min(ANIOS_MEN)}-{max(ANIOS_MEN)}  ·  {meta['imp_menores']:,.0f} € con IVA")
+print(f"modificados  : {len(MOD):5d}  {min(ANIOS_MOD)}-{max(ANIOS_MOD)}  ·  {meta['imp_modificados']:,.0f} € sin IVA")
 print(f"adjudicatarios distintos: {empresas['n_distintas']}")
 print(f"filas en el buscador    : {len(filas)}")
+print(f"documentos fuente       : {len(PROC)}  (ultimo publicado {meta['ultimo_documento']})")
 print(f"data.js                 : {OUT.stat().st_size/1e6:.2f} MB")

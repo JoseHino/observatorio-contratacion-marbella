@@ -1,7 +1,7 @@
 # Observatorio de Transparencia en la Contratación · Ayuntamiento de Marbella
 
-Contratos **mayores y menores** del Ayuntamiento de Marbella, presentados como
-observatorio web con buscador de expedientes.
+Contratos **mayores, menores y modificados** del Ayuntamiento de Marbella,
+presentados como observatorio web con buscador de expedientes.
 
 **Panel:** https://josehino.github.io/observatorio-contratacion-marbella/
 
@@ -11,44 +11,66 @@ observatorio web con buscador de expedientes.
 
 ## Fuente
 
-**Una sola: los datos abiertos de la Plataforma de Contratación del Sector
-Público.** No se usa ningún fichero local ni ningún listado enviado por correo:
-todo lo que hay aquí se puede volver a descargar de la Plataforma, y por eso el
-observatorio puede actualizarse solo.
+**Una sola: los documentos que el propio Ayuntamiento publica en la pestaña
+«Documentos» de su perfil del contratante** en la Plataforma de Contratación
+del Sector Público, que es donde el artículo 63 de la LCSP le obliga a
+publicarlos.
 
-| Dato | Fichero de sindicación | Enlace |
+https://contrataciondelestado.es/wps/portal/perfilContratante → buscar por NIF
+`P2906900B` → *Junta de Gobierno del Ayuntamiento de Marbella* → **Documentos**
+
+| Dato | Documento | Ejercicios |
 |---|---|---|
-| Contratos **mayores** | `licitacionesPerfilesContratanteCompleto3` (`sindicacion_643`) | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
-| Contratos **menores** | `contratosMenoresPerfilesContratantes` (`sindicacion_1143`) | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
-| Ficha de cada expediente | — | https://contrataciondelestado.es/wps/portal/licitaciones |
-| Especificación de los datos | Guía OpenPLACSP (PDF) | https://contrataciondelestado.es/datosabiertos/DGPE_PLACSP_OpenPLACSP_v.1.3.pdf |
-| Códigos CODICE (tipos, procedimientos, CPV) | — | https://contrataciondelestado.es/codice/cl/ |
+| Contratos **mayores** | Listado Anual de Contratos celebrados · **indicador nº 48** | 2019 – 2024 |
+| Contratos **menores** | Relaciones **trimestrales** de contratos menores (y listado anual donde no hay trimestrales) | 2018 – 2025 |
+| **Modificados** | Relación de Modificados · **indicador nº 50** | 2019 – 2024 |
 
-En el panel, **cada gráfica lleva debajo el enlace a su fuente** y cada
-expediente del buscador enlaza a su ficha en la Plataforma.
+No se usa ningún fichero local, ningún Excel enviado por correo ni los ficheros
+de datos abiertos de la Plataforma. Todo lo que hay aquí se puede volver a
+descargar del perfil, y por eso el observatorio puede actualizarse solo.
 
-### Hasta dónde llega cada serie
+La sección **«Documentos fuente»** del panel lista los 43 documentos que
+alimentan cada cifra, con su enlace directo y cuántas filas aporta cada uno.
+Los PDF originales están versionados en `_raw/perfil/`.
 
-| | Desde | Motivo |
-|---|---|---|
-| Contratos mayores | 2018 | La LCSP 9/2017 obliga a publicar en el perfil desde marzo de 2018. |
-| Contratos menores | **2022** | Antes de 2022 la Plataforma no recoge ningún contrato menor del Ayuntamiento. Ese hueco no se rellena con ninguna otra fuente. |
+### Dos avisos que no se pueden omitir
+
+**El IVA.** El listado de contratos mayores publica los importes **sin IVA** y
+la relación de contratos menores, **con IVA**. Ninguno de los dos incluye la
+otra base. Por eso el observatorio **no da ninguna cifra que sume mayores y
+menores en euros**: sería falsa. Cada gráfica declara con qué base está. El
+número de expedientes sí se suma, porque contar no depende del IVA.
+
+**Las series terminan donde termina lo publicado.** Mayores en 2024 y menores
+en 2025, que es el último listado que el Ayuntamiento ha subido. No hay 2026.
+
+### Por qué mandan las relaciones trimestrales
+
+Varios ejercicios tienen a la vez relaciones trimestrales y listado anual, y
+**no dicen lo mismo**. La suma de los trimestres coincide con los totales que
+el propio Ayuntamiento certifica; el listado anual trae a veces filas de más:
+
+| Año | Suma de trimestres | Listado anual | Certificado por el Ayto. |
+|---|---|---|---|
+| 2021 | 693 | — | **693** |
+| 2022 | 677 | 696 | **677** |
+| 2023 | 616 (+19 del complementario) | 635 | **616** |
+| 2025 | 621 | 621 | **621** |
+
+Así que se usan las trimestrales, que además dan el trimestre. El listado anual
+solo se usa en los ejercicios que no tienen trimestrales publicadas (2020).
 
 ## Actualización automática
 
 `.github/workflows/actualizar.yml` corre el **día 25 de cada mes a las 06:00 UTC**
 (también a mano desde la pestaña Actions):
 
-1. Descarga de la PLACSP **solo el ejercicio en curso**. Los años cerrados se
-   reutilizan desde `_raw/cache/`, que sí está versionado —unos 22 MB—. Sin ese
-   atajo habría que bajar 11 GB en cada pasada.
-2. Extrae los expedientes de Marbella, reconstruye `observatorio/data/data.js`.
-3. **Comprueba con Playwright que todas las gráficas pintan.** Si alguna sale
-   vacía, la ejecución falla y no se publica nada.
-4. Si la Plataforma no ha publicado nada nuevo, no toca el repositorio.
-
-Para redescargar años concretos: Actions → *Actualizar observatorio* → *Run
-workflow* → `anios: 2024,2025,2026`.
+1. Abre el perfil del contratante, lee la pestaña Documentos y descarga lo que
+   aún no esté en `_raw/perfil/`. Lo ya descargado no se vuelve a pedir.
+2. Extrae las tablas de los PDF nuevos y reconstruye `observatorio/data/data.js`.
+3. **Comprueba con Playwright que todas las gráficas pintan**, en claro y en
+   oscuro. Si alguna sale vacía, la ejecución falla y no se publica nada.
+4. Si el Ayuntamiento no ha publicado nada nuevo, no toca el repositorio.
 
 ---
 
@@ -58,65 +80,56 @@ workflow* → `anios: 2024,2025,2026`.
 |---|---|
 | `observatorio/` | El panel. Chasis del kit en `assets/`, declaración en `app.js`, datos en `data/data.js`. |
 | `index.html` | Redirección a `observatorio/` para GitHub Pages. |
-| `csv/` | Un CSV por año y clase, más el consolidado `contratos_marbella_completo.csv`. Separador `;` y BOM: se abren en Excel con doble clic. |
-| `contratos_marbella.json` | Todos los expedientes con su detalle, incluidas las adjudicaciones lote a lote. |
-| `_raw/cache/` | El resultado de barrer cada ZIP anual. Versionado a propósito: es lo que hace barata la actualización mensual. |
+| `_raw/perfil/` | Los PDF originales descargados del perfil, más `inventario.json` con título, fecha de publicación y URL de cada uno. |
+| `listados_marbella.json` | Todas las filas extraídas, con el documento del que sale cada una. |
+| `csv/` | Un CSV por clase. Separador `;` y BOM: se abren en Excel con doble clic. |
 | `_scripts/` | El pipeline. |
 
 ## El pipeline, en orden
 
 ```bash
-python _scripts/download_placsp.py      # 1. ZIP anuales (reanudable; PLACSP_YEARS acota los años)
-python _scripts/codigos.py              # 2. listas de códigos CODICE (tipos, CPV…)
-python _scripts/extraer_marbella.py     # 3. filtra Marbella -> JSON + CSV
-python _scripts/build_data.py           # 4. agrega -> observatorio/data/data.js
-python _scripts/verificar.py            # 5. comprueba que TODAS las gráficas pintan
+python _scripts/descargar_perfil.py     # 1. lee el perfil y descarga los PDF nuevos
+python _scripts/extraer_listados.py     # 2. extrae las tablas -> listados_marbella.json + CSV
+python _scripts/build_data.py           # 3. agrega -> observatorio/data/data.js
+python _scripts/verificar.py            # 4. comprueba que TODAS las gráficas pintan
 ```
 
-Los pasos 1 y 3 son incrementales: el descargador salta los ZIP ya presentes y
-válidos, y el extractor cachea el resultado de cada ZIP. Un ZIP ausente cuya
-caché existe se da por bueno, que es lo que permite correr el pipeline en un
-runner sin los 11 GB.
+Requiere `pdfplumber` y `playwright`.
 
-## Cómo se selecciona "Marbella"
+## Cómo se leen los PDF
 
-Por **órgano de contratación**, nunca por el objeto del contrato —si no,
-entrarían las obras de otras administraciones ejecutadas en Marbella:
+Las cabeceras **no son iguales todos los años**: 2023 movió la columna «orden»
+detrás del NIF, 2019 la llamaba «Nº Expediente Clave», 2020 partió
+«A dministración» en dos y algún PDF rompe «Ejercici o» a mitad de palabra. Por
+eso cada columna se localiza **por su nombre normalizado y sin espacios**, no
+por su posición. Si una columna esperada no aparece, el documento se salta con
+un aviso en vez de producir datos torcidos.
 
-- NIF `P2906900B` o DIR3 `L01290691` → *Ayuntamiento de Marbella*. El
-  Ayuntamiento publica indistintamente como Junta de Gobierno, Alcaldía o
-  Pleno; los tres se agrupan bajo la misma entidad.
-- Cualquier otro órgano cuyo nombre o jerarquía contenga «Marbella» se recoge
-  también, con su nombre propio, para no perder los entes municipales
-  dependientes.
+## Control de calidad
 
-Cada expediente aparece una sola vez: si figura en varios ficheros anuales
-—porque se publicó un año y se adjudicó al siguiente— se conserva la versión
-con el `updated` más reciente.
+Los importes extraídos de los PDF, contrastados con los totales que el
+Ayuntamiento certifica (que **no** se usan en el panel, solo como control):
 
-## Qué contiene cada registro
+| Año | Menores extraídos | Certificado | Desvío |
+|---|---|---|---|
+| 2021 | 5.121.497 € | 5.134.147 € | −0,25 % |
+| 2022 | 4.339.821 € | 4.354.564 € | −0,34 % |
+| 2024 | 3.970.894 € | 3.980.241 € | −0,23 % |
+| 2025 | 4.687.510 € | 4.696.243 € | −0,19 % |
 
-Identificación (expediente, órgano, NIF, DIR3), objeto, tipo de contrato,
-procedimiento, tramitación, estado, CPV con su descripción oficial, lugar de
-ejecución, presupuesto base sin y con IVA, valor estimado, duración, número de
-lotes, enlace a la ficha de la Plataforma y **una entrada por adjudicación**
-con lote, resultado, fecha, número de ofertas recibidas, ofertas de PYME,
-adjudicatario, NIF e importe.
+Los desvíos son las dos o tres filas que el PDF publica sin importe.
 
 ## Limitaciones que hay que decir al cliente
 
-- El observatorio refleja **lo publicado en la Plataforma**. Un expediente
-  tramitado y no publicado no aparece.
-- Los indicadores de competencia (ofertas por licitación, adjudicaciones con
-  una sola oferta) se calculan solo sobre los expedientes en los que el órgano
-  de contratación rellenó ese campo, que no son todos.
-- La Plataforma **ofusca el NIF de las personas físicas**, así que un mismo
-  autónomo puede aparecer sin identificador completo.
-- El año en curso es un ejercicio abierto: sus cifras no se comparan con las de
-  un año completo. El panel lo advierte en cada tarjeta.
-- El año de referencia de un expediente es el de su adjudicación; si no consta,
-  el del fin de plazo de presentación, y en último término el del fichero anual
-  en el que apareció por primera vez.
+- El observatorio refleja **lo que el Ayuntamiento publica**. Un contrato
+  tramitado y no incluido en estos listados no aparece.
+- Los indicadores de competencia se calculan solo sobre los contratos en los
+  que consta el número de licitadores. El panel publica esa cobertura.
+- Los nombres de los adjudicatarios se reproducen **tal cual**: una misma
+  empresa puede figurar con grafías distintas y contar dos veces. No se
+  fusionan por parecido, porque eso sería inventar adjudicatarios.
+- Los listados de mayores cuentan **lotes**, no solo expedientes: hay más filas
+  que contratos.
 
 ---
 

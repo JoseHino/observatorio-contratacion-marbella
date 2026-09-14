@@ -1,8 +1,3 @@
-# Los ZIP de la PLACSP pesan 11 GB y se vuelven a descargar cuando hacen falta.
-_raw/*.zip
-# La caché de extracción SÍ se versiona: es lo que permite que la actualización
-# mensual solo tenga que descargar el ejercicio en curso.
-!_raw/cache/
 _capturas/
 *.log
 __pycache__/
