@@ -14,6 +14,7 @@ con el titulo, la fecha de publicacion y la URL de descarga, para que siempre
 se pueda rastrear de donde sale cada cifra.
 """
 import json
+import os
 import pathlib
 import re
 import sys
@@ -101,24 +102,76 @@ def slug(s):
     return re.sub(r"[^A-Za-z0-9]+", "_", s).strip("_")[:70]
 
 
+def id_css(sufijo):
+    """El portal usa ids de JSF con dos puntos, que hay que escapar en CSS."""
+    return "#" + (PRE + sufijo).replace(":", "\\:")
+
+
+def abrir_documentos(pg):
+    """Busca el perfil por NIF y deja abierta la pestana Documentos.
+
+    Nada de esperas por reloj: el portal responde en menos de un segundo desde
+    aqui y en diez desde un runner, asi que se espera a cada elemento. Devuelve
+    las filas de documentos ya leidas.
+    """
+    pg.goto(PERFIL, wait_until="domcontentloaded", timeout=120000)
+    pg.wait_for_selector(id_css("inputTextNif"), timeout=60000)
+    pg.fill(id_css("inputTextNif"), NIF)
+    pg.click(id_css("botonbuscar"))
+
+    enlace = pg.get_by_text("Junta de Gobierno del Ayuntamiento de Marbella").first
+    enlace.wait_for(state="visible", timeout=60000)
+    enlace.click()
+
+    tab = pg.get_by_text("Documentos", exact=True).first
+    tab.wait_for(state="visible", timeout=60000)
+    tab.click()
+
+    # La pestana se rellena por AJAX y por partes. Esperar a que aparezca la
+    # primera fila no basta: la primera vez que se hizo asi se leyeron 24 de
+    # los 48 documentos. Se espera a que el recuento deje de crecer.
+    pg.wait_for_selector("div[id^='epigrafe_'] div.flex-inline-xxs", timeout=60000)
+    SEL = "div[id^='epigrafe_'] div.flex-inline-xxs"
+    previo, estable = -1, 0
+    for _ in range(40):
+        n = pg.eval_on_selector_all(SEL, "els => els.length")
+        estable = estable + 1 if n == previo else 0
+        previo = n
+        if estable >= 3:
+            break
+        pg.wait_for_timeout(500)
+    else:
+        print(f"  aviso: el listado seguia creciendo ({previo} filas) al agotar la espera")
+    return pg.evaluate(JS_FILAS)
+
+
 def main():
     with sync_playwright() as p:
-        nav = p.chromium.launch(**({} if __import__("os").environ.get("CI") else {"channel": "chrome"}))
+        nav = p.chromium.launch(**({} if os.environ.get("CI") else {"channel": "chrome"}))
         ctx = nav.new_context(accept_downloads=True)
         pg = ctx.new_page()
-        pg.goto(PERFIL, wait_until="domcontentloaded", timeout=90000)
-        pg.wait_for_timeout(3000)
-        pg.fill("#" + (PRE + "inputTextNif").replace(":", "\:"), NIF)
-        pg.click("#" + (PRE + "botonbuscar").replace(":", "\:"))
-        pg.wait_for_timeout(5000)
-        pg.click("text=Junta de Gobierno del Ayuntamiento de Marbella")
-        pg.wait_for_timeout(6000)
-        pg.click("text=Documentos")
-        pg.wait_for_timeout(7000)
 
-        filas = pg.evaluate(JS_FILAS)
+        filas = []
+        for intento in (1, 2, 3):
+            try:
+                filas = abrir_documentos(pg)
+                if filas:
+                    break
+                print(f"  intento {intento}: la pestana Documentos vino vacia")
+            except Exception as e:
+                print(f"  intento {intento}: {type(e).__name__}: {str(e)[:120]}")
+            if intento < 3:
+                pg.wait_for_timeout(5000)
+
         if not filas:
-            sys.exit("El perfil no devolvio ningun documento: la pagina ha cambiado.")
+            # Dejar rastro para poder ver que encontro el runner.
+            try:
+                pg.screenshot(path=str(DEST / "_fallo.png"), full_page=True)
+                (DEST / "_fallo.html").write_text(pg.content(), encoding="utf-8")
+            except Exception:
+                pass
+            nav.close()
+            sys.exit("El perfil no devolvio ningun documento tras 3 intentos.")
         print(f"{len(filas)} documentos publicados en el perfil")
 
         inventario = []
@@ -149,6 +202,16 @@ def main():
                 "url": f["url"], "fichero": destino.name,
             })
         nav.close()
+
+    # Red de seguridad: el perfil solo crece. Si una lectura trae menos
+    # documentos que la anterior es que la pagina no habia terminado de
+    # cargar, y sobrescribir el inventario tiraria datos buenos.
+    previo = DEST / "inventario.json"
+    if previo.exists():
+        antes = len(json.loads(previo.read_text(encoding="utf-8")))
+        if len(inventario) < antes:
+            sys.exit(f"ABORTA: se han leido {len(inventario)} documentos y el "
+                     f"inventario anterior tenia {antes}. No se sobrescribe.")
 
     (DEST / "inventario.json").write_text(
         json.dumps(inventario, ensure_ascii=False, indent=1), encoding="utf-8")
