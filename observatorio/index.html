@@ -12,12 +12,38 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;650&display=swap" rel="stylesheet">
 
+<!-- Este observatorio abre SIEMPRE en claro, aunque el sistema esté en oscuro:
+     el kit por defecto sigue la preferencia del sistema y aquí no se quiere.
+     El conmutador de la cabecera sigue funcionando y la elección se recuerda.
+     Va antes del CSS para que no haya destello oscuro al cargar. -->
+<script>
+  (function () {
+    try {
+      if (!localStorage.getItem('obs-tema')) localStorage.setItem('obs-tema', 'light');
+      document.documentElement.setAttribute('data-theme', localStorage.getItem('obs-tema'));
+    } catch (e) {
+      document.documentElement.setAttribute('data-theme', 'light');
+    }
+  })();
+</script>
+
 <!-- Kit: no se toca por observatorio -->
 <link rel="stylesheet" href="assets/obs.css">
 
-<!-- Ajustes de ESTE observatorio: marca y el bloque libre del buscador. -->
+<!-- Ajustes de ESTE observatorio: marca, tinta y el bloque libre del buscador.
+     La tinta del kit (#0f1b2d) se lee como negro; aquí se aclara un paso. -->
 <style>
-  :root { --brand: #37A0B4; --brand-ink: #22697A; --brand-soft: #E6F4F7; }
+  :root {
+    --brand: #37A0B4; --brand-ink: #22697A; --brand-soft: #E6F4F7;
+    --ink: #3b4f66; --ink-2: #67788e; --ink-mut: #93a1b4;
+
+    /* Fondo de página blanco. Con la tarjeta también blanca, la separación la
+       sostiene el borde: por eso --line sube un punto en vez de aclararse. */
+    --bg: #ffffff; --surface: #ffffff;
+    --surface-2: #f7f9fc; --surface-sunk: #f1f5fa;
+    --line: #dfe6f0; --line-strong: #ccd7e6;
+    --grid: #edf2f8; --axis: #d7e0ec;
+  }
   :root[data-theme="dark"] { --brand: #4FB8CC; --brand-ink: #7FD0DF; --brand-soft: #16323A; }
 
   /* --- Buscador de expedientes (bloque libre de la sección) --------------- */

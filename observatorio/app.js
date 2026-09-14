@@ -31,6 +31,8 @@
     'vocabulario cerrado de la Ley de Contratos, no una fusión por parecido. Sin unificarlo, Obras no llegaba ' +
     'a aparecer en las gráficas de contratos menores.';
 
+  var NOTA_BAJA = 'Este listado no permite calcular la baja de adjudicación. Hasta 2021 el importe adjudicado era menor que el de licitación en casi todos los expedientes; desde 2022 el Ayuntamiento rellena la columna de licitación con otro criterio y la adjudicación pasa a superarla en una parte creciente de las filas. Agregado, 2024 daría una baja negativa, que como indicador de eficiencia sería falsa. En su lugar se publica ese desajuste.';
+
   function en(a, i) { return (a && i >= 0 && a[i] != null && isFinite(a[i])) ? a[i] : null; }
   function delta(a, i) {
     var c = en(a, i), p = en(a, i - 1);
@@ -350,14 +352,15 @@
               delta: delta(m.adjudicado, i), deltaRef: 'interanual', serie: m.adjudicado },
             { label: 'Importe medio por contrato', valor: en(m.importe_medio, i),
               formato: function (v) { return F.eur(v); } },
-            { label: 'Baja de adjudicación en ' + M.anio_max_may, valor: en(r.baja, iR),
-              unidad: '%', dec: 1, serie: r.baja }
+            { label: 'Adjudicación por encima de la licitación en ' + M.anio_max_may,
+              valor: en((D.anomalia || {}).pct, idx((D.anomalia || {}).x, M.anio_max_may)),
+              unidad: '%', dec: 1, invertir: true, serie: (D.anomalia || {}).pct }
           ],
           cards: [
             {
               titulo: 'Presupuesto de licitación frente a lo adjudicado', sub: 'Euros sin IVA',
               chips: [CHIP_MAY], fuente: FUENTE, ancho: 'full',
-              nota: 'La diferencia entre las dos barras es la baja de adjudicación: cuánto se rebaja respecto al precio de salida.',
+              nota: NOTA_BAJA,
               spec: {
                 type: 'bar', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'eur', xTodas: true,
                 series: [
@@ -590,20 +593,21 @@
         var c = D.competencia || {}, r = D.resumen || {}, x = c.x || [];
         var i = ult(x);
         return {
-          nota: 'Todo lo de esta sección se calcula <b>solo sobre los contratos en los que consta el número de licitadores</b>. La última tarjeta dice cuántos son: si la cobertura es baja, los porcentajes de arriba valen menos.',
+          nota: 'Todo lo de esta sección se cuenta <b>por expediente, no por fila</b>. El listado trae una fila por lote y por adjudicatario, y los expedientes patrimoniales de la feria —puestos de alimentación, casetas— repiten el mismo expediente decenas de veces con el total de solicitantes en cada fila: contando filas, la media de licitadores de 2024 salía 26,4 en vez de 4,5. Además se calcula <b>solo sobre los expedientes en los que consta el número de licitadores</b>; la última tarjeta dice cuántos son.',
           kpis: [
-            { label: 'Media de licitadores en ' + M.anio_max_may, valor: en(c.media, i), dec: 1,
+            { label: 'Licitadores por expediente en ' + M.anio_max_may, valor: en(c.media, i), dec: 1,
               delta: delta(c.media, i), deltaRef: 'interanual', serie: c.media },
             { label: 'Adjudicados con una sola oferta', valor: en(c.pct_una, i), unidad: '%', dec: 1,
               delta: delta(c.pct_una, i), deltaRef: 'interanual', invertir: true, serie: c.pct_una },
-            { label: 'Baja de adjudicación', valor: en(r.baja, idx(r.x, M.anio_max_may)),
-              unidad: '%', dec: 1, serie: r.baja },
-            { label: 'Contratos con el dato informado', valor: en(c.pct_informados, i), unidad: '%', dec: 1,
+            { label: 'Adjudicación por encima de la licitación',
+              valor: en((D.anomalia || {}).pct, idx((D.anomalia || {}).x, M.anio_max_may)),
+              unidad: '%', dec: 1, invertir: true, serie: (D.anomalia || {}).pct },
+            { label: 'Expedientes con el dato informado', valor: en(c.pct_informados, i), unidad: '%', dec: 1,
               serie: c.pct_informados }
           ],
           cards: [
             {
-              titulo: 'Media de licitadores por contrato', sub: 'Contratos mayores',
+              titulo: 'Media de licitadores por expediente', sub: 'Contratos mayores',
               chips: [CHIP_MAY], fuente: FUENTE,
               spec: {
                 type: 'line', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'num', xTodas: true,
@@ -611,7 +615,7 @@
               }
             },
             {
-              titulo: 'Contratos con una sola oferta', sub: 'Porcentaje sobre los contratos con el dato informado',
+              titulo: 'Expedientes con una sola oferta', sub: 'Porcentaje sobre los expedientes con el dato informado',
               chips: [CHIP_MAY], fuente: FUENTE,
               nota: 'Una sola oferta no es ilegal ni implica irregularidad, pero deja el precio sin contraste.',
               spec: {
@@ -620,16 +624,17 @@
               }
             },
             {
-              titulo: 'Baja de adjudicación', sub: 'Cuánto se rebaja el precio de salida, en porcentaje',
+              titulo: 'Contratos adjudicados por encima de su importe de licitación',
+              sub: 'Porcentaje sobre los expedientes que publican las dos cifras',
               chips: [CHIP_MAY], fuente: FUENTE,
-              nota: 'Se agrega por importes, no promediando porcentajes: un contrato de un millón pesa lo que vale.',
+              nota: NOTA_BAJA,
               spec: {
-                type: 'line', xType: 'anual', xLabel: 'Año', x: r.x, yFormat: 'pct', xTodas: true,
-                series: [{ name: 'Baja media', data: r.baja }]
+                type: 'line', xType: 'anual', xLabel: 'Año', x: (D.anomalia || {}).x, yFormat: 'pct', xTodas: true,
+                series: [{ name: 'Adjudicación por encima de la licitación', data: (D.anomalia || {}).pct }]
               }
             },
             {
-              titulo: 'Cobertura del indicador', sub: 'Contratos en los que consta el número de licitadores',
+              titulo: 'Cobertura del indicador', sub: 'Expedientes en los que consta el número de licitadores',
               chips: [CHIP_MAY], fuente: FUENTE,
               nota: 'Esto no es un dato de contratación, es la calidad del dato: cuanto más baja, menos representativas son las tres tarjetas anteriores.',
               spec: {

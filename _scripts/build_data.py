@@ -158,17 +158,26 @@ for i, a in enumerate(ANIOS):
     resumen["pct_menores_num"].append(
         round(nm / (nm + nM) * 100, 1) if nm and nM else None)
 
-# Baja de adjudicacion: solo mayores, y solo donde constan las dos cifras.
-baja = []
+# La "baja de adjudicacion" NO se puede calcular con este listado.
+#
+# Hasta 2021 el importe de adjudicacion era menor que el de licitacion en casi
+# todas las filas, como cabe esperar. A partir de 2022 el Ayuntamiento rellena
+# la columna de importe de licitacion con otro criterio y la adjudicacion pasa
+# a superarla en una parte creciente de los expedientes: 38,6 % en 2022,
+# 44,6 % en 2023 y 60,5 % en 2024. Agregado, 2024 daria una baja de -1,5 %,
+# que presentada como indicador de eficiencia es sencillamente falsa.
+#
+# Asi que en vez de una baja se publica el desajuste, que si es un hecho
+# comprobable y ademas dice algo sobre la calidad de lo publicado.
+anomalia = {"x": ANIOS, "n": [], "pct": [], "con_ambas": []}
 for rs in por_anio(MAY, ANIOS):
     par = [(r["importe_licitacion"], r["importe_adjudicacion"]) for r in rs
            if r.get("importe_licitacion") and r.get("importe_adjudicacion")]
-    if not par:
-        baja.append(None)
-        continue
-    lic, adj = sum(p for p, _ in par), sum(a for _, a in par)
-    baja.append(round((lic - adj) / lic * 100, 1) if lic else None)
-resumen["baja"] = baja
+    n = sum(1 for lic, adj in par if adj > lic)
+    anomalia["con_ambas"].append(len(par) or None)
+    anomalia["n"].append(n or None)
+    anomalia["pct"].append(round(n / len(par) * 100, 1) if par else None)
+resumen["adj_supera_lic"] = anomalia["pct"]
 
 # ============================================================  MAYORES  ====
 TIPOS_MAY = [t for t, _ in Counter(tipo_contrato(r["tipo"]) for r in MAY
@@ -214,18 +223,39 @@ for rs in por_anio(MAY, ANIOS_MAY):
     mayores["importe_medio"].append(round(sum(v) / len(v), 2) if v else None)
 
 # =========================================================  COMPETENCIA  ===
+# POR EXPEDIENTE, NO POR FILA. El listado trae una fila por lote y por
+# adjudicatario: los expedientes patrimoniales de la feria (puestos de
+# alimentacion, casetas de juegos) repiten el mismo expediente decenas de veces
+# con el total de solicitantes en cada fila. Contando filas, la media de
+# licitadores de 2024 salia 26,4; por expediente son 4,5, que es la cifra real.
+#
 # El n de licitadores solo esta relleno en parte de los expedientes: los
 # indicadores se calculan sobre los informados y se publica cuantos son.
+def expedientes_con_licitadores(rs):
+    """{expediente: n licitadores}. Si una fila del mismo expediente trae un
+    numero distinto se queda el mayor: el campo es del expediente, no del lote."""
+    out = {}
+    for r in rs:
+        k = limpia(r.get("expediente")).upper()
+        n = r.get("n_licitadores")
+        if k and isinstance(n, int) and n > 0:
+            out[k] = max(out.get(k, 0), n)
+    return out
+
+
 competencia = {"x": ANIOS_MAY, "media": [], "pct_una": [],
-               "informados": [], "pct_informados": []}
+               "informados": [], "pct_informados": [], "expedientes": []}
 for rs in por_anio(MAY, ANIOS_MAY):
-    v = [r["n_licitadores"] for r in rs
-         if isinstance(r.get("n_licitadores"), int) and r["n_licitadores"] > 0]
+    todos = {limpia(r.get("expediente")).upper() for r in rs if limpia(r.get("expediente"))}
+    con = expedientes_con_licitadores(rs)
+    v = list(con.values())
+    competencia["expedientes"].append(len(todos) or None)
     competencia["media"].append(round(sum(v) / len(v), 1) if v else None)
     competencia["pct_una"].append(
         round(sum(1 for x in v if x == 1) / len(v) * 100, 1) if v else None)
     competencia["informados"].append(len(v) or None)
-    competencia["pct_informados"].append(round(len(v) / len(rs) * 100, 1) if rs else None)
+    competencia["pct_informados"].append(
+        round(len(v) / len(todos) * 100, 1) if todos else None)
 
 # ============================================================  MENORES  ====
 TIPOS_MEN = [t for t, _ in Counter(tipo_contrato(r["tipo"]) for r in MEN
@@ -373,7 +403,8 @@ meta = {
 
 payload = {
     "meta": meta, "resumen": resumen, "mayores": mayores, "menores": menores,
-    "modificados": modificados, "competencia": competencia, "empresas": empresas,
+    "modificados": modificados, "competencia": competencia, "anomalia": anomalia,
+    "empresas": empresas,
     "busqueda": {"campos": CAMPOS, "filas": filas, "claves": claves},
 }
 
