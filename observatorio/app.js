@@ -563,55 +563,9 @@
 
     /* ----------------------------------------------------- Adjudicatarios - */
     {
-      id: 'empresas', nombre: 'Adjudicatarios',
+      id: 'adjudicatarios', nombre: 'Adjudicatarios',
       titulo: 'Quién cobra',
-      desc: 'Empresas y profesionales que aparecen como adjudicatarios. Los dos rankings de importe van por separado —mayores sin IVA, menores con IVA— porque sumarlos daría una cifra que no significa nada. El recuento de contratos sí es conjunto.',
-      render: function () {
-        var e = D.empresas || {};
-        return {
-          nota: 'Los nombres se toman tal cual vienen publicados. Una misma empresa puede figurar con grafías distintas —con y sin «S.L.», con comas de más— y contar dos veces: aquí no se fusionan por parecido, porque eso sería inventar adjudicatarios.',
-          kpis: [
-            { label: 'Adjudicatarios distintos', valor: e.n_distintas, formato: F.num },
-            { label: 'Aparecen en contratos mayores', valor: e.n_solo_mayores, formato: F.num },
-            { label: 'Aparecen en contratos menores', valor: e.n_solo_menores, formato: F.num },
-            { label: 'Los 10 primeros, sobre el importe en mayores', valor: e.concentracion_may, unidad: '%', dec: 1 }
-          ],
-          cards: [
-            {
-              titulo: 'Mayores adjudicatarios en contratos mayores', sub: 'Euros sin IVA, acumulado del periodo',
-              chips: [CHIP_MAY], fuente: FUENTE, ancho: 'full', alto: 'tall', nota: SIN_IVA,
-              spec: {
-                type: 'barh', x: (e.top_mayores || {}).x, yFormat: 'eur', xLabel: 'Adjudicatario',
-                series: [{ name: 'Importe adjudicado', data: (e.top_mayores || {}).v }]
-              }
-            },
-            {
-              titulo: 'Mayores adjudicatarios en contratos menores', sub: 'Euros con IVA, acumulado del periodo',
-              chips: [CHIP_MEN], fuente: FUENTE, ancho: 'full', alto: 'tall', nota: CON_IVA,
-              spec: {
-                type: 'barh', x: (e.top_menores || {}).x, yFormat: 'eur', xLabel: 'Adjudicatario',
-                series: [{ name: 'Importe adjudicado', data: (e.top_menores || {}).v }]
-              }
-            },
-            {
-              titulo: 'Quién firma más contratos', sub: 'Número de contratos, mayores y menores juntos',
-              chips: [{ txt: 'Mayores y menores' }], fuente: FUENTE, ancho: 'full', alto: 'tall',
-              nota: 'Aquí sí se suman las dos clases, porque contar expedientes no depende del IVA.',
-              spec: {
-                type: 'barh', x: (e.top_numero || {}).x, yFormat: 'num', xLabel: 'Adjudicatario',
-                series: [{ name: 'Nº de contratos', data: (e.top_numero || {}).v }]
-              }
-            }
-          ]
-        };
-      }
-    },
-
-    /* ------------------------------------------------ Adjudicatarios por año */
-    {
-      id: 'porano', nombre: 'Por año',
-      titulo: 'Quién cobró cada año',
-      desc: 'Los mayores adjudicatarios de un ejercicio concreto. El selector de cada gráfica cambia el año. Mayores y menores van por separado, con su base de IVA.',
+      desc: 'Los mayores adjudicatarios del ejercicio que se elija en cada gráfica. Mayores y menores van por separado, porque sus importes no comparten base de IVA y sumarlos daría una cifra que no significa nada.',
       render: function () {
         var pa = ((D.empresas || {}).por_anio) || {};
         var aMay = pa.anios_may || [], aMen = pa.anios_men || [];

@@ -35,7 +35,7 @@ DIAG = """id => {
   };
 }"""
 
-SECS = ["panorama", "mayores", "menores", "modificados", "empresas", "porano", "competencia", "buscador", "documentos"]
+SECS = ["panorama", "mayores", "menores", "modificados", "adjudicatarios", "competencia", "buscador", "documentos"]
 fallos = []
 
 with sync_playwright() as p:
