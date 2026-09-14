@@ -31,7 +31,6 @@
   var CHIP_MAYORES = { txt: 'Contratos mayores', tipo: 'brand' };
   var CHIP_MENORES = { txt: 'Contratos menores', tipo: 'brand' };
   var NOTA_CURSO = ANIO_CURSO + ' es un ejercicio en curso: sus cifras no son comparables con las de un año completo.';
-  var NOTA_CORTE = 'Aviso: el último contrato mayor del Ayuntamiento recogido en este fichero de la PLACSP es de ' + (M.ultimo_periodo || '') + '. Desde entonces el fichero no trae expedientes suyos, por lo que las barras de contratos mayores de los últimos años NO significan que el Ayuntamiento haya dejado de licitar: está pendiente comprobar si pasó a publicar a través de una plataforma agregada.';
   var NOTA_IVA = 'Importes con IVA. Es la única base común a las dos fuentes, porque el listado municipal de menores solo publica el importe con IVA.';
 
   function en(a, i) { return (a && a[i] != null && isFinite(a[i])) ? a[i] : null; }
@@ -50,7 +49,7 @@
     {
       id: 'panorama', nombre: 'Panorama',
       titulo: 'La contratación del Ayuntamiento en cifras',
-      desc: 'El observatorio junta las dos mitades de la contratación municipal, que viven en sitios distintos: los <b>contratos mayores</b> salen de los datos abiertos de la Plataforma de Contratación del Sector Público, y los <b>contratos menores</b> de la relación anual que publica el propio Ayuntamiento, porque no los vuelca en la Plataforma. Se cuentan expedientes, no lotes.',
+      desc: 'El observatorio junta las dos mitades de la contratación municipal. Los <b>contratos mayores</b> salen de los datos abiertos de la Plataforma de Contratación del Sector Público. Los <b>contratos menores</b> están en dos sitios que no coinciden: la Plataforma los recoge desde ' + (M.anio_min_menores_placsp || '') + ', y el Ayuntamiento certifica además un total anual propio, que es el que se usa en los agregados. Se cuentan expedientes, no lotes.',
       render: function () {
         var r = D.resumen || {};
         return {
@@ -82,7 +81,7 @@
             {
               titulo: 'Expedientes por año', sub: 'Contratos mayores y menores',
               chips: [CHIP_ANUAL], fuente: FUENTE_PLACSP, ancho: 'full',
-              nota: NOTA_CURSO + ' Los menores solo están disponibles desde ' + M.anio_min_menores + '. ' + NOTA_CORTE,
+              nota: NOTA_CURSO + ' Los menores solo están disponibles desde ' + M.anio_min_menores + '.',
               spec: {
                 type: 'stack', xType: 'anual', xLabel: 'Año', x: ANIOS, yFormat: 'num', xTodas: true,
                 series: [
@@ -94,7 +93,7 @@
             {
               titulo: 'Importe adjudicado por año', sub: 'Euros con IVA',
               chips: [CHIP_ANUAL], fuente: FUENTE_PLACSP, ancho: 'full',
-              nota: NOTA_IVA + ' ' + NOTA_CURSO + ' ' + NOTA_CORTE,
+              nota: NOTA_IVA + ' ' + NOTA_CURSO,
               spec: {
                 type: 'stack', xType: 'anual', xLabel: 'Año', x: ANIOS, yFormat: 'eur', xTodas: true,
                 series: [
@@ -192,14 +191,16 @@
     {
       id: 'menores', nombre: 'Contratos menores',
       titulo: 'Lo que se adjudica sin licitación',
-      desc: 'El contrato menor —hasta 15.000 € en servicios y suministros y 40.000 € en obras— se adjudica directamente, sin concurrencia. El Ayuntamiento no lo vuelca en la Plataforma de Contratación: lo publica en su propia relación anual, y de ahí salen estas cifras. Los agregados usan los totales certificados por el Ayuntamiento; el listado contrato a contrato está en la pestaña de búsqueda.',
+      desc: 'El contrato menor —hasta 15.000 € en servicios y suministros y 40.000 € en obras— se adjudica directamente, sin concurrencia. El Ayuntamiento lo publica en la Plataforma de Contratación desde ' + (M.anio_min_menores_placsp || '') + ' y, en paralelo, certifica un total anual en su propia relación, que llega más atrás. Los agregados usan ese total certificado; el listado contrato a contrato está en la pestaña de búsqueda.',
       render: function () {
         var m = D.menores || {}, r = D.resumen || {};
         var iM = ANIOS.indexOf(ANIO_CURSO - 1);
         return {
-          nota: 'Los totales certificados existen para ' + (m.anios_certificados || []).join(', ') +
-            '. El listado de detalle recoge ' + F.num(m.n_detalle) + ' contratos y no cuadra exactamente con ellos ' +
-            '—procede de volcados en PDF con líneas partidas y repetidas—, así que las gráficas usan el total certificado y el buscador, el detalle.',
+          nota: 'El contrato menor está en dos sitios que no dicen lo mismo. El Ayuntamiento publica sus menores en la ' +
+            'PLACSP desde ' + (M.anio_min_menores_placsp || '') + ' (' + F.num(M.n_menores_placsp) + ' expedientes, cada uno con su ficha), ' +
+            'y además certifica un total anual propio, que existe para ' + (m.anios_certificados || []).join(', ') + ' y llega más atrás. ' +
+            'Las gráficas usan el total certificado, que es la cifra que el Ayuntamiento firma; el buscador usa el detalle de la ' +
+            'PLACSP donde lo hay y el listado municipal en los años en que no. La diferencia entre ambos se mide abajo, en cobertura.',
           kpis: [
             { label: 'Contratos menores en ' + (ANIO_CURSO - 1), valor: en(r.n_menores, iM),
               delta: delta(r.n_menores, iM), deltaRef: 'interanual', serie: r.n_menores },
@@ -246,9 +247,24 @@
               }
             },
             {
+              titulo: 'Cuánto de lo certificado llega a la Plataforma',
+              sub: 'Contratos menores publicados en la PLACSP sobre el total certificado por el Ayuntamiento',
+              chips: [CHIP_MENORES], fuente: FUENTE_PLACSP, ancho: 'full',
+              nota: 'Solo se puede calcular en los años que tienen las dos cifras. Un 100 % significa que todo lo que el ' +
+                'Ayuntamiento certifica aparece también en la Plataforma; por debajo, hay contratos menores certificados que ' +
+                'no llegaron a publicarse allí. Antes de ' + (M.anio_min_menores_placsp || '') + ' la Plataforma no trae ninguno.',
+              spec: {
+                type: 'line', xType: 'anual', xLabel: 'Año', x: (D.cobertura || {}).x, yFormat: 'pct', xTodas: true,
+                series: [
+                  { name: 'Sobre el nº de contratos', data: (D.cobertura || {}).pct_n },
+                  { name: 'Sobre el importe', data: (D.cobertura || {}).pct_imp }
+                ]
+              }
+            },
+            {
               titulo: 'Mayores proveedores de contratos menores', sub: 'Euros con IVA, acumulado del periodo',
               chips: [CHIP_MENORES], fuente: FUENTE_AYTO, ancho: 'full', alto: 'tall',
-              nota: 'Calculado sobre el listado de detalle, única fuente con el nombre del adjudicatario.',
+              nota: 'Calculado sobre el listado de detalle del Ayuntamiento, que cubre todo el periodo; los menores de la PLACSP, disponibles solo desde ' + (M.anio_min_menores_placsp || '') + ', también traen adjudicatario y se pueden consultar uno a uno en el buscador.',
               spec: { type: 'barh', x: ((D.empresas || {}).top_menores || {}).x, yFormat: 'eur', xLabel: 'Proveedor',
                       series: [{ name: 'Importe adjudicado', data: ((D.empresas || {}).top_menores || {}).v }] }
             }
@@ -622,18 +638,17 @@
       'anuales completos, selecciona los expedientes cuyo <i>órgano de contratación</i> —nunca el objeto— es el ' +
       'Ayuntamiento de Marbella (NIF ' + esc(M.nif) + ', DIR3 L01290691) o un ente municipal dependiente, conserva ' +
       'la versión más reciente de cada expediente y traduce los códigos CODICE a su descripción oficial. ' +
-      '<br><br><b>Contratos menores.</b> El Ayuntamiento no los publica en la PLACSP —comprobado fichero a fichero ' +
-      'en los datos abiertos—, así que proceden de la ' +
+      '<br><br><b>Contratos menores.</b> Tienen dos fuentes que no coinciden. El Ayuntamiento los publica en la PLACSP ' +
+      'desde ' + esc(String(M.anio_min_menores_placsp || '')) + ' (' + F.num(M.n_menores_placsp) + ' expedientes, con ficha propia), y ' +
+      'además certifica un total anual en su ' +
       '<a href="https://informacionpublica.marbella.es/ambitos/gestion-economica-y-administrativa/contratacion-publica.html" ' +
-      'target="_blank" rel="noopener">relación anual que publica el propio Ayuntamiento</a>. Las gráficas usan los totales ' +
-      'certificados por el Ayuntamiento y el buscador, el listado de detalle. ' +
+      'target="_blank" rel="noopener">relación anual propia</a>, que llega hasta ' + esc(String(M.anio_min_menores || '')) + '. ' +
+      'Las gráficas agregadas usan el total certificado, que es la cifra que el Ayuntamiento firma; el buscador usa el ' +
+      'detalle de la PLACSP donde lo hay y el listado municipal en los años en que la PLACSP no trae nada. La sección de ' +
+      'menores publica la diferencia entre ambos como indicador de cobertura. ' +
       '<br><br>Todos los importes van <b>con IVA</b>, la única base común a las dos fuentes. Cada tarjeta permite ' +
       'ver los datos en tabla y descargarlos en CSV; el buscador exporta la selección completa.',
-    pie: '<b>El fichero de datos abiertos de la PLACSP deja de traer contratos mayores del Ayuntamiento después de ' +
-      esc(M.ultimo_periodo || '') + '.</b> No es un cero de contratación: lo más probable es que el Ayuntamiento pasara a '+
-      'publicar por una plataforma agregada, pendiente de comprobar. Las cifras de contratos mayores de los últimos ' +
-      'años deben leerse con esa reserva. <br><br>' +
-      'El observatorio refleja lo publicado: un expediente tramitado y no publicado no aparece, y los campos ' +
+    pie: 'El observatorio refleja lo publicado: un expediente tramitado y no publicado no aparece, y los campos ' +
       'que el órgano de contratación deja vacíos —número de ofertas, importe de adjudicación— quedan fuera de los ' +
       'indicadores que dependen de ellos. La Plataforma ofusca el NIF de las personas físicas. ' +
       'Las cifras de ' + M.anio_max + ' corresponden a un ejercicio en curso.'

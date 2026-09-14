@@ -21,24 +21,31 @@ observatorio web con buscador de expedientes.
 En el panel, **cada gráfica lleva debajo el enlace a su fuente** y cada
 expediente mayor del buscador enlaza a su ficha en la Plataforma.
 
-> **Las dos mitades viven en sitios distintos.** Los contratos **mayores** salen
-> de los datos abiertos de la PLACSP. Los **menores no están ahí**: se comprobó
-> fichero a fichero sobre los datos abiertos 2018-2026 y el Ayuntamiento no los
-> vuelca en la Plataforma —las apariciones de «Marbella» en esos ficheros son
-> contratos de otros organismos ejecutados en el municipio—. La fuente de los
-> menores es la **relación anual que publica el propio Ayuntamiento**.
+> **Los contratos menores están en dos sitios que no dicen lo mismo.** El
+> Ayuntamiento los publica en la PLACSP **desde 2022** (2.655 expedientes, cada
+> uno con su ficha) y, en paralelo, certifica un **total anual propio** en su
+> relación de contratos menores, que llega hasta 2020 y cubre años que la
+> Plataforma no tiene. Las dos cifras no coinciden: la PLACSP recoge entre el
+> 83 % y el 100 % de lo certificado, según el año.
+>
+> Las **gráficas agregadas usan el total certificado**, que es la cifra que el
+> Ayuntamiento firma. El **buscador usa el detalle de la PLACSP** donde lo hay y
+> el listado municipal en los años en que la PLACSP no trae nada —nunca los dos
+> a la vez, que serían el mismo contrato dos veces—. La diferencia se publica
+> como **indicador de cobertura** en la sección de contratos menores.
 >
 > Todos los importes van **con IVA**: es la única base común, porque el listado
 > municipal de menores solo publica el importe con IVA.
 
-## Aviso sobre el corte de la serie de contratos mayores
+## Cobertura de la PLACSP sobre lo certificado
 
-El fichero de datos abiertos de la PLACSP **deja de traer contratos mayores del
-Ayuntamiento después de 2022**. No es un cero de contratación: lo más probable
-es que el Ayuntamiento pasara a publicar a través de una plataforma agregada
-(`sindicacion_1044` / `PlataformasAgregadasSinMenores`), algo que queda
-pendiente de comprobar e incorporar. Las barras de contratos mayores de los
-últimos años deben leerse con esa reserva, y el panel lo advierte.
+| Año | Certificado por el Ayto. | En la PLACSP | Cobertura (nº) |
+|---|---|---|---|
+| 2021 | 693 · 5,13 M€ | — | la PLACSP no trae ninguno |
+| 2022 | 677 · 4,35 M€ | 647 · 4,48 M€ | 95,6 % |
+| 2023 | 616 · 4,24 M€ | 545 · 3,68 M€ | 88,5 % |
+| 2024 | 553 · 3,98 M€ | 492 · 3,33 M€ | 89,0 % |
+| 2025 | 621 · 4,70 M€ | 577 · 3,88 M€ | 92,9 % |
 
 ---
 
