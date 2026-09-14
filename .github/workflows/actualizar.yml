@@ -36,6 +36,18 @@ jobs:
       - name: Descargar los documentos del perfil del contratante
         run: python _scripts/descargar_perfil.py
 
+      # Si el scraper no encuentra la pestaña, deja captura y HTML: sin esto
+      # no hay forma de saber qué le está sirviendo el portal al runner.
+      - name: Guardar el rastro del fallo
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fallo-scraper
+          path: |
+            _raw/perfil/_fallo.png
+            _raw/perfil/_fallo.html
+          if-no-files-found: ignore
+
       - name: Extraer las tablas de los PDF
         run: python _scripts/extraer_listados.py
 

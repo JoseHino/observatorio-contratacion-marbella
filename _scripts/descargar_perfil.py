@@ -123,6 +123,9 @@ def abrir_documentos(pg):
     enlace.wait_for(state="visible", timeout=60000)
     enlace.click()
 
+    # La ficha del perfil tiene que cargar antes de buscar sus pestanas.
+    pg.wait_for_selector("text=Órgano de Contratación", timeout=60000)
+
     tab = pg.get_by_text("Documentos", exact=True).first
     tab.wait_for(state="visible", timeout=60000)
     tab.click()
@@ -148,7 +151,17 @@ def abrir_documentos(pg):
 def main():
     with sync_playwright() as p:
         nav = p.chromium.launch(**({} if os.environ.get("CI") else {"channel": "chrome"}))
-        ctx = nav.new_context(accept_downloads=True)
+        # El portal sirve paginas distintas segun el navegador y el idioma, y
+        # desde un runner el chromium pelado no trae ni UA de escritorio ni
+        # locale espanol.
+        ctx = nav.new_context(
+            accept_downloads=True,
+            locale="es-ES",
+            timezone_id="Europe/Madrid",
+            viewport={"width": 1500, "height": 1200},
+            user_agent=("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"),
+        )
         pg = ctx.new_page()
 
         filas = []
