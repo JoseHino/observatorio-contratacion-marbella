@@ -20,8 +20,8 @@
 
   /* Fuentes: SIEMPRE el enlace directo al sitio del que salen los datos. */
   var FUENTE_PLACSP = {
-    txt: 'PLACSP · datos abiertos (licitacionesPerfilesContratanteCompleto3)',
-    url: 'https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom'
+    txt: 'Plataforma de Contratación del Sector Público · datos abiertos',
+    url: 'https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos'
   };
   var FUENTE_AYTO = {
     txt: 'Ayuntamiento de Marbella · Portal de Información Pública · Contratación pública',
@@ -606,9 +606,7 @@
     fuentes: [
       FUENTE_PLACSP,
       FUENTE_AYTO,
-      { txt: 'PLACSP · portal de datos abiertos (todos los ficheros de sindicación)',
-        url: 'https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos' },
-      { txt: 'PLACSP · buscador de licitaciones (ficha de cada expediente)',
+      { txt: 'Plataforma de Contratación · buscador de licitaciones (ficha de cada expediente)',
         url: 'https://contrataciondelestado.es/wps/portal/licitaciones' },
       { txt: 'Perfil del contratante del Ayuntamiento de Marbella',
         url: 'https://ayuntamiento.marbella.es/oferta-publica/perfil-del-contratante.html' },
@@ -619,7 +617,7 @@
     ],
     metodologia:
       '<b>Contratos mayores.</b> Ficheros de sindicación de la PLACSP ' +
-      '(<a href="https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom" ' +
+      '(<a href="https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos" ' +
       'target="_blank" rel="noopener"><code>licitacionesPerfilesContratanteCompleto3</code></a>). Un proceso automático descarga los ficheros ' +
       'anuales completos, selecciona los expedientes cuyo <i>órgano de contratación</i> —nunca el objeto— es el ' +
       'Ayuntamiento de Marbella (NIF ' + esc(M.nif) + ', DIR3 L01290691) o un ente municipal dependiente, conserva ' +

@@ -11,10 +11,9 @@ observatorio web con buscador de expedientes.
 
 | Dato | Fuente | Enlace directo |
 |---|---|---|
-| Contratos **mayores** | PLACSP · fichero anual de sindicación `licitacionesPerfilesContratanteCompleto3` | https://contrataciondelestado.es/sindicacion/sindicacion_643/licitacionesPerfilesContratanteCompleto3.atom |
+| Contratos **mayores** | Plataforma de Contratación del Sector Público · datos abiertos (fichero anual `licitacionesPerfilesContratanteCompleto3`) | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
 | Contratos **menores** | Ayuntamiento de Marbella · Portal de Información Pública → Contratación pública | https://informacionpublica.marbella.es/ambitos/gestion-economica-y-administrativa/contratacion-publica.html |
 | Ficha de cada expediente | PLACSP · buscador de licitaciones | https://contrataciondelestado.es/wps/portal/licitaciones |
-| Resto de ficheros de datos abiertos | PLACSP · portal de datos abiertos | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
 | Perfil del contratante | Ayuntamiento de Marbella | https://ayuntamiento.marbella.es/oferta-publica/perfil-del-contratante.html |
 | Especificación de los datos | Guía OpenPLACSP (PDF) | https://contrataciondelestado.es/datosabiertos/DGPE_PLACSP_OpenPLACSP_v.1.3.pdf |
 | Códigos CODICE (tipos, procedimientos, CPV) | PLACSP | https://contrataciondelestado.es/codice/cl/ |
