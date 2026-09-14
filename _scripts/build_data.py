@@ -76,6 +76,65 @@ def fecha_pub(s):
     return ""
 
 
+def _sin_tildes(s):
+    s = unicodedata.normalize("NFKD", limpia(s).lower())
+    return "".join(c for c in s if not unicodedata.combining(c))
+
+
+def tipo_contrato(s):
+    """Unifica el tipo de contrato, que el listado escribe como le parece.
+
+    No es fusionar por parecido: el tipo es un vocabulario cerrado de la LCSP y
+    los listados lo escriben en singular y en plural indistintamente
+    ("Servicio"/"Servicios", "Obra"/"Obras"), con alguna errata de volcado
+    ("Sevicios", "Esuministro"). Sin unificar, en contratos menores el top de
+    tipos salia Servicios/Servicio/Suministro/Suministros y OBRAS NO APARECIA
+    EN NINGUNA GRAFICA.
+
+    Lo que no se reconoce se deja tal cual, a la vista, en vez de esconderlo en
+    un "Otros": si en la columna de tipo aparece un procedimiento —pasa en unas
+    pocas filas de un PDF con las columnas descuadradas— hay que poder verlo.
+    """
+    t = _sin_tildes(s)
+    if not t:
+        return ""
+    if "obra" in t:
+        return "Obras"
+    if "suministr" in t:
+        return "Suministros"
+    if "servicio" in t or "sevicio" in t:
+        return "Servicios"
+    if "patrimonial" in t:
+        return "Patrimonial"
+    if "administrativo especial" in t:
+        return "Administrativo especial"
+    if "privado" in t:
+        return "Privado"
+    return limpia(s).title()
+
+
+def procedimiento(s):
+    """Mismo criterio para el procedimiento: 'Engarco a medios propios' es la
+    misma figura que 'Encargo a medio propio', y 'Simplificado sumario' es el
+    'Abierto simplificado sumario' escrito corto."""
+    t = _sin_tildes(s)
+    if not t:
+        return ""
+    if "encargo" in t or "engarco" in t:
+        return "Encargo a medio propio"
+    if "sumario" in t:
+        return "Abierto simplificado sumario"
+    if "simplificado" in t:
+        return "Abierto simplificado"
+    if "negociado" in t:
+        return "Negociado sin publicidad"
+    if t.startswith("abierto"):
+        return "Abierto"
+    if "emergencia" in t:
+        return "Emergencia"
+    return limpia(s).title()
+
+
 def titulo_empresa(s):
     """Los nombres vienen tal cual los publica el Ayuntamiento: la misma
     empresa aparece con grafias distintas. Se normaliza lo evidente (espacios,
@@ -112,23 +171,28 @@ for rs in por_anio(MAY, ANIOS):
 resumen["baja"] = baja
 
 # ============================================================  MAYORES  ====
-TIPOS_MAY = [t for t, _ in Counter(limpia(r["tipo"]).title() for r in MAY
-                                   if limpia(r["tipo"])).most_common(6)]
-PROCS = [p for p, _ in Counter(limpia(r["procedimiento"]).title() for r in MAY
-                               if limpia(r["procedimiento"])).most_common(6)]
+TIPOS_MAY = [t for t, _ in Counter(tipo_contrato(r["tipo"]) for r in MAY
+                                   if tipo_contrato(r["tipo"])).most_common(6)]
+PROCS = [p for p, _ in Counter(procedimiento(r["procedimiento"]) for r in MAY
+                               if procedimiento(r["procedimiento"])).most_common(6)]
+
+
+def _norm_campo(campo):
+    return tipo_contrato if campo == "tipo" else procedimiento
 
 
 def reparto(filas, anios, campo, valores):
+    f = _norm_campo(campo)
     return [serie(filas, anios,
-                  lambda rs, v=v: sum(1 for r in rs
-                                      if limpia(r[campo]).title() == v) or None)
+                  lambda rs, v=v: sum(1 for r in rs if f(r[campo]) == v) or None)
             for v in valores]
 
 
 def reparto_imp(filas, anios, campo, valores, imp):
+    f = _norm_campo(campo)
     return [serie(filas, anios,
                   lambda rs, v=v: round(sum(r.get(imp) or 0 for r in rs
-                                            if limpia(r[campo]).title() == v), 2) or None)
+                                            if f(r[campo]) == v), 2) or None)
             for v in valores]
 
 
@@ -164,8 +228,8 @@ for rs in por_anio(MAY, ANIOS_MAY):
     competencia["pct_informados"].append(round(len(v) / len(rs) * 100, 1) if rs else None)
 
 # ============================================================  MENORES  ====
-TIPOS_MEN = [t for t, _ in Counter(limpia(r["tipo"]).title() for r in MEN
-                                   if limpia(r["tipo"])).most_common(4)]
+TIPOS_MEN = [t for t, _ in Counter(tipo_contrato(r["tipo"]) for r in MEN
+                                   if tipo_contrato(r["tipo"])).most_common(4)]
 menores = {
     "x": ANIOS_MEN,
     "tipos": TIPOS_MEN,
@@ -260,20 +324,20 @@ def norm(s):
 filas = []
 for r in MAY:
     filas.append([r["anio"], "m", limpia(r["expediente"]), limpia(r["objeto"])[:400],
-                  limpia(r["tipo"]).title(), limpia(r["procedimiento"]).title(),
+                  tipo_contrato(r["tipo"]), procedimiento(r["procedimiento"]),
                   limpia(r["adjudicatario"]), limpia(r.get("nif_adjudicatario")),
                   r.get("importe_adjudicacion"), r.get("importe_licitacion"),
                   r.get("fecha_formalizacion") or "", r["documento"], r["url_documento"]])
 for r in MEN:
     ref = limpia(r["expediente"]) or limpia(r.get("n_contrato"))
     filas.append([r["anio"], "M", ref, limpia(r["objeto"])[:400],
-                  limpia(r["tipo"]).title(), "Contrato menor",
+                  tipo_contrato(r["tipo"]), "Contrato menor",
                   limpia(r["adjudicatario"]), limpia(r.get("nif_adjudicatario")),
                   r.get("importe_con_iva"), None,
                   "", r["documento"], r["url_documento"]])
 for r in MOD:
     filas.append([r["anio"], "x", limpia(r["expediente"]), limpia(r["objeto"])[:400],
-                  limpia(r["tipo"]).title(), "Modificación",
+                  tipo_contrato(r["tipo"]), "Modificación",
                   limpia(r["adjudicatario"]), limpia(r.get("nif_adjudicatario")),
                   r.get("importe_modificacion"), None,
                   r.get("fecha_formalizacion") or "", r["documento"], r["url_documento"]])

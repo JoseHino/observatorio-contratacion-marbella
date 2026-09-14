@@ -26,6 +26,10 @@
   var CHIP_MOD = { txt: 'Modificados', tipo: 'brand' };
   var SIN_IVA = 'Importes SIN IVA: es como los publica el listado anual de contratos.';
   var CON_IVA = 'Importes CON IVA: es como los publica la relación de contratos menores.';
+  var NOTA_TIPOS = 'Los listados escriben el tipo de contrato en singular y en plural indistintamente ' +
+    '—«Servicio» y «Servicios», «Obra» y «Obras»— y con alguna errata de volcado. Aquí se unifican: es un ' +
+    'vocabulario cerrado de la Ley de Contratos, no una fusión por parecido. Sin unificarlo, Obras no llegaba ' +
+    'a aparecer en las gráficas de contratos menores.';
 
   function en(a, i) { return (a && i >= 0 && a[i] != null && isFinite(a[i])) ? a[i] : null; }
   function delta(a, i) {
@@ -364,7 +368,7 @@
             },
             {
               titulo: 'Contratos por tipo', sub: 'Número de contratos, serie anual',
-              chips: [CHIP_MAY], fuente: FUENTE, ancho: 'full',
+              chips: [CHIP_MAY], fuente: FUENTE, ancho: 'full', nota: NOTA_TIPOS,
               spec: {
                 type: 'stack', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'num', xTodas: true,
                 series: series(m.tipos, m.n_tipo)
@@ -432,7 +436,7 @@
           cards: [
             {
               titulo: 'Contratos menores por tipo', sub: 'Número de contratos, serie anual',
-              chips: [CHIP_MEN], fuente: FUENTE, ancho: 'full',
+              chips: [CHIP_MEN], fuente: FUENTE, ancho: 'full', nota: NOTA_TIPOS,
               spec: {
                 type: 'stack', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'num', xTodas: true,
                 series: series(m.tipos, m.n_tipo)
