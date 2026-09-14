@@ -217,6 +217,8 @@ mayores = {
     "adjudicado": serie(MAY, ANIOS_MAY, suma("importe_adjudicacion")),
     "importe_medio": [],
     "n_lotes": sum(1 for r in MAY if limpia(r.get("lote"))),
+    "total_n": serie(MAY, ANIOS_MAY, cuenta),
+    "total_imp": serie(MAY, ANIOS_MAY, suma("importe_adjudicacion")),
 }
 for rs in por_anio(MAY, ANIOS_MAY):
     v = [r["importe_adjudicacion"] for r in rs if r.get("importe_adjudicacion")]
@@ -266,6 +268,8 @@ menores = {
     "n_tipo": reparto(MEN, ANIOS_MEN, "tipo", TIPOS_MEN),
     "imp_tipo": reparto_imp(MEN, ANIOS_MEN, "tipo", TIPOS_MEN, "importe_con_iva"),
     "importe_medio": [],
+    "total_n": serie(MEN, ANIOS_MEN, cuenta),
+    "total_imp": serie(MEN, ANIOS_MEN, suma("importe_con_iva")),
     "trimestres": {"x": ["T1", "T2", "T3", "T4"], "anios": [], "n": [], "importe": []},
 }
 for rs in por_anio(MEN, ANIOS_MEN):
@@ -329,6 +333,25 @@ n_conjunto.update(emp_may_n)
 n_conjunto.update(emp_men_n)
 top_num = n_conjunto.most_common(15)
 
+# Ranking por ano, para la pestana que deja elegir ejercicio. Se calcula para
+# las dos clases por separado, porque los importes no comparten base de IVA.
+def ranking_anual(filas, imp, anios, n=12):
+    out = {}
+    for a in anios:
+        tot = defaultdict(float)
+        for r in filas:
+            if r["anio"] != a:
+                continue
+            nom = titulo_empresa(r.get("adjudicatario"))
+            if nom:
+                tot[nom] += r.get(imp) or 0
+        top = sorted(tot.items(), key=lambda kv: -kv[1])[:n]
+        out[str(a)] = {"x": [k for k, _ in top][::-1],
+                       "v": [round(v, 2) for _, v in top][::-1],
+                       "n_distintos": len(tot)}
+    return out
+
+
 empresas = {
     "top_mayores": top_may,
     "top_menores": top_men,
@@ -337,6 +360,11 @@ empresas = {
     "n_solo_mayores": len(emp_may_i),
     "n_solo_menores": len(emp_men_i),
     "n_en_ambos": len(set(emp_may_i) & set(emp_men_i)),
+    "por_anio": {
+        "mayores": ranking_anual(MAY, "importe_adjudicacion", ANIOS_MAY),
+        "menores": ranking_anual(MEN, "importe_con_iva", ANIOS_MEN),
+        "anios_may": ANIOS_MAY, "anios_men": ANIOS_MEN,
+    },
     "concentracion_may": round(
         sum(v for _, v in sorted(emp_may_i.items(), key=lambda kv: -kv[1])[:10])
         / (sum(emp_may_i.values()) or 1) * 100, 1),

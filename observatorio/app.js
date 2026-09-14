@@ -283,12 +283,6 @@
         var r = D.resumen || {}, x = r.x || [];
         return {
           nota: 'Las dos mitades no se pueden sumar en euros. El listado de contratos mayores publica los importes <b>sin IVA</b> y la relación de menores, <b>con IVA</b>, y ninguno de los dos incluye la otra base. Por eso no verás aquí ninguna cifra global de «lo que contrata el Ayuntamiento»: sería falsa. El número de expedientes sí se suma.',
-          kpis: [
-            { label: 'Contratos mayores ' + M.anio_min_may + '–' + M.anio_max_may, valor: M.n_mayores, formato: F.num },
-            { label: 'Contratos menores ' + M.anio_min_men + '–' + M.anio_max_men, valor: M.n_menores, formato: F.num },
-            { label: 'Adjudicado en mayores (sin IVA)', valor: M.imp_mayores, formato: eurM },
-            { label: 'Adjudicado en menores (con IVA)', valor: M.imp_menores, formato: eurM }
-          ],
           cards: [
             {
               titulo: 'Expedientes por año', sub: 'Número de contratos, mayores y menores',
@@ -386,6 +380,23 @@
               }
             },
             {
+              titulo: 'Total de contratos por año', sub: 'Contratos mayores, todos los tipos',
+              chips: [CHIP_MAY], fuente: FUENTE,
+              nota: 'El total de la composición de arriba, año a año.',
+              spec: {
+                type: 'bar', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'num', xTodas: true,
+                series: [{ name: 'Contratos', data: m.total_n }]
+              }
+            },
+            {
+              titulo: 'Total adjudicado por año', sub: 'Contratos mayores, euros sin IVA',
+              chips: [CHIP_MAY], fuente: FUENTE, nota: SIN_IVA,
+              spec: {
+                type: 'bar', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'eur', xTodas: true,
+                series: [{ name: 'Adjudicado', data: m.total_imp }]
+              }
+            },
+            {
               titulo: 'Procedimiento de adjudicación', sub: 'Número de contratos, serie anual',
               chips: [CHIP_MAY], fuente: FUENTE, ancho: 'full',
               nota: 'El procedimiento abierto es el que garantiza más concurrencia. El negociado sin publicidad y el de emergencia son las excepciones, y conviene mirar cuánto pesan.',
@@ -424,9 +435,7 @@
         var m = D.menores || {}, r = D.resumen || {}, x = m.x || [];
         var i = ult(x), t = m.trimestres || {}, iR = idx(r.x, M.anio_max_men);
         return {
-          nota: 'Serie ' + M.anio_min_men + '–' + M.anio_max_men + '. ' + CON_IVA +
-            ' El reparto por trimestre solo existe en los ejercicios con relaciones trimestrales publicadas (' +
-            (t.anios || []).join(', ') + '); en el resto el Ayuntamiento solo publicó el listado anual.',
+          nota: 'Serie ' + M.anio_min_men + '–' + M.anio_max_men + '. ' + CON_IVA + ' ' + NOTA_TIPOS,
           kpis: [
             { label: 'Contratos menores en ' + M.anio_max_men, valor: en(r.n_menores, iR), formato: F.num,
               delta: delta(r.n_menores, iR), deltaRef: 'interanual', serie: r.n_menores },
@@ -454,14 +463,20 @@
               }
             },
             {
-              titulo: 'Reparto por trimestre', sub: 'Importe adjudicado en cada trimestre, euros con IVA',
-              chips: [CHIP_MEN], fuente: FUENTE, ancho: 'full',
-              nota: 'La concentración en el cuarto trimestre es el patrón habitual del cierre presupuestario: conviene mirarla año a año.',
+              titulo: 'Total de contratos menores por año', sub: 'Todos los tipos',
+              chips: [CHIP_MEN], fuente: FUENTE,
+              nota: 'El total de la composición de arriba, año a año.',
               spec: {
-                type: 'bar', xType: 'cat', xLabel: 'Trimestre', x: t.x, yFormat: 'eur', xTodas: true,
-                series: (t.anios || []).map(function (a, k) {
-                  return { name: String(a), data: (t.importe || [])[k] };
-                })
+                type: 'bar', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'num', xTodas: true,
+                series: [{ name: 'Contratos', data: m.total_n }]
+              }
+            },
+            {
+              titulo: 'Total adjudicado por año', sub: 'Contratos menores, euros con IVA',
+              chips: [CHIP_MEN], fuente: FUENTE, nota: CON_IVA,
+              spec: {
+                type: 'bar', xType: 'anual', xLabel: 'Año', x: x, yFormat: 'eur', xTodas: true,
+                series: [{ name: 'Adjudicado', data: m.total_imp }]
               }
             },
             {
@@ -571,6 +586,14 @@
               }
             },
             {
+              titulo: 'Mayores adjudicatarios en contratos menores', sub: 'Euros con IVA, acumulado del periodo',
+              chips: [CHIP_MEN], fuente: FUENTE, ancho: 'full', alto: 'tall', nota: CON_IVA,
+              spec: {
+                type: 'barh', x: (e.top_menores || {}).x, yFormat: 'eur', xLabel: 'Adjudicatario',
+                series: [{ name: 'Importe adjudicado', data: (e.top_menores || {}).v }]
+              }
+            },
+            {
               titulo: 'Quién firma más contratos', sub: 'Número de contratos, mayores y menores juntos',
               chips: [{ txt: 'Mayores y menores' }], fuente: FUENTE, ancho: 'full', alto: 'tall',
               nota: 'Aquí sí se suman las dos clases, porque contar expedientes no depende del IVA.',
@@ -578,6 +601,52 @@
                 type: 'barh', x: (e.top_numero || {}).x, yFormat: 'num', xLabel: 'Adjudicatario',
                 series: [{ name: 'Nº de contratos', data: (e.top_numero || {}).v }]
               }
+            }
+          ]
+        };
+      }
+    },
+
+    /* ------------------------------------------------ Adjudicatarios por año */
+    {
+      id: 'porano', nombre: 'Por año',
+      titulo: 'Quién cobró cada año',
+      desc: 'Los mayores adjudicatarios de un ejercicio concreto. El selector de cada gráfica cambia el año. Mayores y menores van por separado, con su base de IVA.',
+      render: function () {
+        var pa = ((D.empresas || {}).por_anio) || {};
+        var aMay = pa.anios_may || [], aMen = pa.anios_men || [];
+        var ultMay = String(aMay[aMay.length - 1] || ''), ultMen = String(aMen[aMen.length - 1] || '');
+
+        function opciones(lista) {
+          return lista.slice().reverse().map(function (a) { return { v: String(a), txt: String(a) }; });
+        }
+        function specDe(clase, formato) {
+          return function (anio) {
+            var d = (pa[clase] || {})[String(anio)] || { x: [], v: [] };
+            return {
+              type: 'barh', x: d.x, yFormat: formato, xLabel: 'Adjudicatario',
+              series: [{ name: 'Importe adjudicado', data: d.v }],
+              vacioTxt: 'El listado de ese ejercicio no trae adjudicatarios.'
+            };
+          };
+        }
+
+        return {
+          nota: 'Cada gráfica muestra los 12 mayores adjudicatarios del año elegido. Los importes de mayores van sin IVA y los de menores con IVA, así que las dos gráficas no se comparan entre sí: se leen por separado.',
+          cards: [
+            {
+              titulo: 'Mayores adjudicatarios en contratos mayores', sub: 'Euros sin IVA',
+              chips: [CHIP_MAY], fuente: FUENTE, ancho: 'full', alto: 'tall', nota: SIN_IVA,
+              control: { label: 'Año', opciones: opciones(aMay), valor: ultMay,
+                         spec: specDe('mayores', 'eur') },
+              spec: specDe('mayores', 'eur')(ultMay)
+            },
+            {
+              titulo: 'Mayores adjudicatarios en contratos menores', sub: 'Euros con IVA',
+              chips: [CHIP_MEN], fuente: FUENTE, ancho: 'full', alto: 'tall', nota: CON_IVA,
+              control: { label: 'Año', opciones: opciones(aMen), valor: ultMen,
+                         spec: specDe('menores', 'eur') },
+              spec: specDe('menores', 'eur')(ultMen)
             }
           ]
         };
