@@ -1,0 +1,4 @@
+# Los CSV se escriben con CRLF a propósito (se abren en Excel con doble clic).
+# Sin esto, git los normaliza y cada actualización mensual aparece como si
+# hubieran cambiado las 8.000 filas, cuando no ha cambiado ninguna.
+*.csv -text
