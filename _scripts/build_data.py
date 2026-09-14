@@ -1,19 +1,19 @@
-"""Agrega las dos fuentes del observatorio y escribe observatorio/data/data.js.
+"""Agrega los datos del observatorio y escribe observatorio/data/data.js.
 
-  * Contratos MAYORES -> datos abiertos de la PLACSP (fuente="mayores").
-  * Contratos MENORES -> dos sitios a la vez, y no dicen lo mismo:
-      - la PLACSP, desde 2022 (fuente="menores"), expediente a expediente y con
-        ficha enlazable;
-      - los listados anuales del Ayuntamiento (menores_marbella.json), que son
-        los TOTALES CERTIFICADOS y llegan mas atras (2020-2021), pero sin ficha.
-    Las graficas agregadas usan el total certificado, que es la cifra que el
-    Ayuntamiento firma; el buscador usa el detalle de la PLACSP donde lo hay y
-    el listado municipal en los anos en que la PLACSP no trae nada. La
-    diferencia entre ambos se publica como indicador de cobertura.
+FUENTE UNICA: los datos abiertos de la Plataforma de Contratacion del Sector
+Publico, filtrados por el organo de contratacion del Ayuntamiento de Marbella.
+El fichero de la PLACSP trae las dos clases y hay que separarlas:
 
-Toda la serie monetaria se expresa en EUROS CON IVA, que es la unica base
-comun a las dos fuentes: los listados de menores solo publican el importe con
-IVA. Donde se usa el importe sin IVA se dice expresamente.
+  * fuente="mayores" -> licitacionesPerfilesContratanteCompleto3 (sindicacion_643)
+  * fuente="menores" -> contratosMenoresPerfilesContratantes  (sindicacion_1143)
+
+No se usa ningun listado local del Ayuntamiento: todo lo que entra aqui se
+puede volver a descargar de la Plataforma, que es lo que permite que el
+observatorio se actualice solo cada mes.
+
+Los importes van en EUROS CON IVA salvo donde se diga; la PLACSP publica las
+dos bases, asi que la comparacion presupuesto/adjudicacion se hace sin IVA,
+que es donde ambas magnitudes son homogeneas.
 """
 import json
 import pathlib
@@ -31,12 +31,8 @@ OUT.parent.mkdir(parents=True, exist_ok=True)
 ANIO_MIN = 2018          # la LCSP 9/2017 obliga a publicar en perfil desde 03/2018
 ANIO_MAX = datetime.now().year
 ANIOS = list(range(ANIO_MIN, ANIO_MAX + 1))
-ANIO_MIN_MENORES = 2020  # primer listado de menores disponible
 
 MAYORES = json.loads((ROOT / "contratos_marbella.json").read_text(encoding="utf-8"))
-MEN = json.loads((ROOT / "menores_marbella.json").read_text(encoding="utf-8"))
-OFICIAL = {int(a): v for a, v in MEN["oficial"].items()}
-MENORES = [r for r in MEN["registros"] if ANIO_MIN <= r["anio"] <= ANIO_MAX]
 
 _EN_RANGO = [r for r in MAYORES if r.get("anio") and ANIO_MIN <= r["anio"] <= ANIO_MAX]
 
@@ -68,38 +64,17 @@ def serie(f, datos=None):
     return [f(por.get(a, [])) for a in ANIOS]
 
 
-def ofic(anio, seccion, clave):
-    return (OFICIAL.get(anio, {}).get(seccion, {}).get(clave) or {}).get("total")
-
-
 def placsp_men_n(anio):
     return sum(1 for r in PLACSP_MEN if r["anio"] == anio) or None
 
 
 def placsp_men_imp(anio):
-    s = sum(adj_con_iva(r) for r in PLACSP_MEN if r["anio"] == anio)
-    return round(s, 2) or None
+    s_ = sum(adj_con_iva(r) for r in PLACSP_MEN if r["anio"] == anio)
+    return round(s_, 2) or None
 
 
-def menores_n(anio):
-    """Numero de contratos menores del ano. Manda el total certificado por el
-    Ayuntamiento; si ese ano no esta certificado todavia, lo publicado en la
-    PLACSP; y en ultimo termino el recuento del listado municipal de detalle."""
-    v = ofic(anio, "n", "TOTAL")
-    if v is not None:
-        return int(v)
-    return placsp_men_n(anio) or (sum(1 for r in MENORES if r["anio"] == anio) or None)
-
-
-def menores_imp(anio):
-    v = ofic(anio, "importe", "TOTAL")
-    if v is not None:
-        return round(v, 2)
-    v = placsp_men_imp(anio)
-    if v is not None:
-        return v
-    s = sum(r["importe_con_iva"] or 0 for r in MENORES if r["anio"] == anio)
-    return round(s, 2) or None
+menores_n = placsp_men_n
+menores_imp = placsp_men_imp
 
 
 # --------------------------------------------------------------- resumen ---
@@ -151,27 +126,39 @@ es_n = Counter(r["estado"] or "Sin estado" for r in D)
 estados = {"x": [e for e, _ in es_n.most_common()], "n": [n for _, n in es_n.most_common()]}
 
 # ------------------------------------------------------------- menores -----
-MEN_TIPOS = ["Servicios", "Suministros", "Obras"]
-# Solo los ejercicios con listado publicado: una columna vacia al final no
-# informa de nada y descuadra la lectura de la serie.
-ANIOS_MEN = [a for a in ANIOS
-             if a >= ANIO_MIN_MENORES and (a in OFICIAL or any(r["anio"] == a for r in MENORES))]
+MEN_TIPOS = [t for t, _ in Counter(r["tipo"] for r in PLACSP_MEN if r["tipo"]).most_common(4)]
+ANIOS_MEN = [a for a in ANIOS if a in ANIOS_PLACSP_MEN]
 
 
 def men_tipo(anio, tipo, seccion):
-    v = ofic(anio, seccion, tipo)
-    if v is not None:
-        return round(v, 2) if seccion == "importe" else int(v)
-    filas = [r for r in MENORES if r["anio"] == anio and r["tipo"] == tipo]
+    filas = [r for r in PLACSP_MEN if r["anio"] == anio and r["tipo"] == tipo]
     if not filas:
         return None
-    return round(sum(r["importe_con_iva"] or 0 for r in filas), 2) if seccion == "importe" else len(filas)
+    return round(sum(adj_con_iva(r) for r in filas), 2) if seccion == "importe" else len(filas)
 
 
-# Reparto trimestral: solo existe en los totales certificados.
+def trimestre(r):
+    """Trimestre de la adjudicacion. Sin fecha no hay trimestre: no se inventa."""
+    f = r.get("fecha_adjudicacion") or ""
+    if len(f) >= 7 and f[5:7].isdigit():
+        return (int(f[5:7]) - 1) // 3
+    return None
+
+
 def men_trim(anio, seccion):
-    t = (OFICIAL.get(anio, {}).get(seccion, {}).get("TOTAL") or {}).get("trimestres")
-    return t if t else [None] * 4
+    out = [0, 0, 0, 0]
+    visto = False
+    for r in PLACSP_MEN:
+        if r["anio"] != anio:
+            continue
+        t = trimestre(r)
+        if t is None:
+            continue
+        visto = True
+        out[t] += 1 if seccion == "n" else adj_con_iva(r)
+    if not visto:
+        return [None] * 4
+    return [round(v, 2) for v in out] if seccion == "importe" else out
 
 
 menores = {
@@ -181,16 +168,16 @@ menores = {
     "importe": [[men_tipo(a, t, "importe") for a in ANIOS_MEN] for t in MEN_TIPOS],
     "trimestres": {
         "x": ["T1", "T2", "T3", "T4"],
-        "anios": [a for a in ANIOS_MEN if OFICIAL.get(a)],
-        "importe": [men_trim(a, "importe") for a in ANIOS_MEN if OFICIAL.get(a)],
-        "n": [men_trim(a, "n") for a in ANIOS_MEN if OFICIAL.get(a)],
+        "anios": ANIOS_MEN,
+        "importe": [men_trim(a, "importe") for a in ANIOS_MEN],
+        "n": [men_trim(a, "n") for a in ANIOS_MEN],
     },
     "importe_medio": [
-        round(menores_imp(a) / menores_n(a), 2) if menores_n(a) and menores_imp(a) else None
+        round(placsp_men_imp(a) / placsp_men_n(a), 2) if placsp_men_n(a) and placsp_men_imp(a) else None
         for a in ANIOS_MEN
     ],
-    "n_detalle": len(MENORES),
-    "anios_certificados": sorted(OFICIAL),
+    "n_detalle": len(PLACSP_MEN),
+    "sin_fecha": sum(1 for r in PLACSP_MEN if trimestre(r) is None),
 }
 
 # -------------------------------------------------------- adjudicatarios ---
@@ -202,11 +189,12 @@ for r in D:
         if nom:
             emp_i[nom] += a.get("importe_con_iva") or 0
             emp_n[nom] += 1
-for r in MENORES:
-    nom = (r.get("adjudicatario") or "").strip()
-    if nom:
-        emp_men_i[nom] += r["importe_con_iva"] or 0
-        emp_men_n[nom] += 1
+for r in PLACSP_MEN:
+    for a in r["adjudicaciones"]:
+        nom = (a.get("adjudicatario") or "").strip()
+        if nom:
+            emp_men_i[nom] += a.get("importe_con_iva") or 0
+            emp_men_n[nom] += 1
 
 todos_i = defaultdict(float)
 todos_n = Counter()
@@ -339,38 +327,8 @@ for r in PLACSP_MEN:
         r.get("fecha_adjudicacion") or "", r["organo"] or "",
         (r["cpv_desc"][0] if r.get("cpv_desc") else ""), r.get("enlace") or "",
     ])
-for r in MENORES:
-    if r["anio"] in ANIOS_PLACSP_MEN:
-        continue
-    ref = " · ".join(x for x in (r.get("expediente"), r.get("n_contrato")) if x)
-    filas.append([
-        r["anio"], "M", ref, (r["objeto"] or "")[:400],
-        r["tipo"] or "", "Contrato menor", "Adjudicado",
-        r.get("adjudicatario") or "", r.get("nif_adjudicatario") or "",
-        r.get("importe_con_iva"), None,
-        "", "Ayuntamiento de Marbella", "", "",
-    ])
-
 filas.sort(key=lambda f: (-(f[0] or 0), f[2] or ""))
 claves = [norm(" ".join(str(f[i] or "") for i in (2, 3, 7, 8, 12, 13))) for f in filas]
-
-# ------------------------------------------------- cobertura de la PLACSP ---
-# Cuanto de lo que el Ayuntamiento certifica en contratos menores llega a la
-# Plataforma. Solo tiene sentido en los anos con las dos cifras.
-cobertura = {
-    "x": ANIOS,
-    "certificado_n": [ofic(a, "n", "TOTAL") for a in ANIOS],
-    "certificado_imp": [ofic(a, "importe", "TOTAL") for a in ANIOS],
-    "placsp_n": [placsp_men_n(a) for a in ANIOS],
-    "placsp_imp": [placsp_men_imp(a) for a in ANIOS],
-    "pct_n": [],
-    "pct_imp": [],
-}
-for i, a in enumerate(ANIOS):
-    cn, pn = cobertura["certificado_n"][i], cobertura["placsp_n"][i]
-    ci, pi = cobertura["certificado_imp"][i], cobertura["placsp_imp"][i]
-    cobertura["pct_n"].append(round(pn / cn * 100, 1) if cn and pn else None)
-    cobertura["pct_imp"].append(round(pi / ci * 100, 1) if ci and pi else None)
 
 # ------------------------------------------------------------------ meta ---
 imp_may = round(sum(adj_con_iva(r) for r in D), 2)
@@ -380,15 +338,14 @@ meta = {
     "entidad": "Ayuntamiento de Marbella",
     "nif": "P2906900B",
     "actualizado": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-    "n_expedientes": len(D) + sum(v for v in resumen["n_menores"] if v),
+    "n_expedientes": len(D) + len(PLACSP_MEN),
     "n_mayores": len(D),
-    "n_menores": sum(v for v in resumen["n_menores"] if v),
-    "n_menores_detalle": len(MENORES),
+    "n_menores": len(PLACSP_MEN),
     "n_menores_placsp": len(PLACSP_MEN),
     "anio_min_menores_placsp": min(ANIOS_PLACSP_MEN) if ANIOS_PLACSP_MEN else None,
     "anio_min": ANIO_MIN,
     "anio_max": ANIO_MAX,
-    "anio_min_menores": ANIO_MIN_MENORES,
+    "anio_min_menores": min(ANIOS_PLACSP_MEN) if ANIOS_PLACSP_MEN else None,
     "importe_total": round(imp_may + imp_men, 2),
     "importe_mayores": imp_may,
     "importe_menores": imp_men,
@@ -399,7 +356,7 @@ meta = {
 payload = {
     "meta": meta, "resumen": resumen, "tipos": tipos, "procedimientos": procedimientos,
     "estados": estados, "menores": menores, "empresas": empresas, "cpv": cpv,
-    "competencia": competencia, "cobertura": cobertura,
+    "competencia": competencia,
     "busqueda": {"campos": CAMPOS, "filas": filas, "claves": claves},
 }
 
@@ -410,10 +367,9 @@ OUT.write_text(
 )
 
 print(f"mayores (PLACSP)        : {len(D)}  ·  {imp_may:,.0f} € con IVA")
-print(f"menores (PLACSP)        : {len(PLACSP_MEN)}  ·  desde {meta['anio_min_menores_placsp']}")
-print(f"menores (Ayuntamiento)  : {meta['n_menores']} certificados / {len(MENORES)} en detalle"
+print(f"menores (PLACSP)        : {len(PLACSP_MEN)}  ·  desde {meta['anio_min_menores_placsp']}"
       f"  ·  {imp_men:,.0f} € con IVA")
-print(f"periodo                 : {ANIO_MIN}-{ANIO_MAX} (menores desde {ANIO_MIN_MENORES})")
+print(f"periodo                 : {ANIO_MIN}-{ANIO_MAX} (menores desde {meta['anio_min_menores']})")
 print(f"adjudicatarios distintos: {empresas['n_distintas']}")
 print(f"filas en el buscador    : {len(filas)}")
 print(f"data.js                 : {OUT.stat().st_size/1e6:.2f} MB")

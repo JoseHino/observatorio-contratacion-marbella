@@ -5,47 +5,50 @@ observatorio web con buscador de expedientes.
 
 **Panel:** https://josehino.github.io/observatorio-contratacion-marbella/
 
+**Se actualiza solo el día 25 de cada mes.**
+
 ---
 
-## Fuentes (enlace directo a cada una)
+## Fuente
 
-| Dato | Fuente | Enlace directo |
+**Una sola: los datos abiertos de la Plataforma de Contratación del Sector
+Público.** No se usa ningún fichero local ni ningún listado enviado por correo:
+todo lo que hay aquí se puede volver a descargar de la Plataforma, y por eso el
+observatorio puede actualizarse solo.
+
+| Dato | Fichero de sindicación | Enlace |
 |---|---|---|
-| Contratos **mayores** | Plataforma de Contratación del Sector Público · datos abiertos (fichero anual `licitacionesPerfilesContratanteCompleto3`) | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
-| Contratos **menores** | Ayuntamiento de Marbella · Portal de Información Pública → Contratación pública | https://informacionpublica.marbella.es/ambitos/gestion-economica-y-administrativa/contratacion-publica.html |
-| Ficha de cada expediente | PLACSP · buscador de licitaciones | https://contrataciondelestado.es/wps/portal/licitaciones |
-| Perfil del contratante | Ayuntamiento de Marbella | https://ayuntamiento.marbella.es/oferta-publica/perfil-del-contratante.html |
+| Contratos **mayores** | `licitacionesPerfilesContratanteCompleto3` (`sindicacion_643`) | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
+| Contratos **menores** | `contratosMenoresPerfilesContratantes` (`sindicacion_1143`) | https://contrataciondelsectorpublico.gob.es/wps/portal/DatosAbiertos |
+| Ficha de cada expediente | — | https://contrataciondelestado.es/wps/portal/licitaciones |
 | Especificación de los datos | Guía OpenPLACSP (PDF) | https://contrataciondelestado.es/datosabiertos/DGPE_PLACSP_OpenPLACSP_v.1.3.pdf |
-| Códigos CODICE (tipos, procedimientos, CPV) | PLACSP | https://contrataciondelestado.es/codice/cl/ |
+| Códigos CODICE (tipos, procedimientos, CPV) | — | https://contrataciondelestado.es/codice/cl/ |
 
 En el panel, **cada gráfica lleva debajo el enlace a su fuente** y cada
-expediente mayor del buscador enlaza a su ficha en la Plataforma.
+expediente del buscador enlaza a su ficha en la Plataforma.
 
-> **Los contratos menores están en dos sitios que no dicen lo mismo.** El
-> Ayuntamiento los publica en la PLACSP **desde 2022** (2.655 expedientes, cada
-> uno con su ficha) y, en paralelo, certifica un **total anual propio** en su
-> relación de contratos menores, que llega hasta 2020 y cubre años que la
-> Plataforma no tiene. Las dos cifras no coinciden: la PLACSP recoge entre el
-> 83 % y el 100 % de lo certificado, según el año.
->
-> Las **gráficas agregadas usan el total certificado**, que es la cifra que el
-> Ayuntamiento firma. El **buscador usa el detalle de la PLACSP** donde lo hay y
-> el listado municipal en los años en que la PLACSP no trae nada —nunca los dos
-> a la vez, que serían el mismo contrato dos veces—. La diferencia se publica
-> como **indicador de cobertura** en la sección de contratos menores.
->
-> Todos los importes van **con IVA**: es la única base común, porque el listado
-> municipal de menores solo publica el importe con IVA.
+### Hasta dónde llega cada serie
 
-## Cobertura de la PLACSP sobre lo certificado
+| | Desde | Motivo |
+|---|---|---|
+| Contratos mayores | 2018 | La LCSP 9/2017 obliga a publicar en el perfil desde marzo de 2018. |
+| Contratos menores | **2022** | Antes de 2022 la Plataforma no recoge ningún contrato menor del Ayuntamiento. Ese hueco no se rellena con ninguna otra fuente. |
 
-| Año | Certificado por el Ayto. | En la PLACSP | Cobertura (nº) |
-|---|---|---|---|
-| 2021 | 693 · 5,13 M€ | — | la PLACSP no trae ninguno |
-| 2022 | 677 · 4,35 M€ | 647 · 4,48 M€ | 95,6 % |
-| 2023 | 616 · 4,24 M€ | 545 · 3,68 M€ | 88,5 % |
-| 2024 | 553 · 3,98 M€ | 492 · 3,33 M€ | 89,0 % |
-| 2025 | 621 · 4,70 M€ | 577 · 3,88 M€ | 92,9 % |
+## Actualización automática
+
+`.github/workflows/actualizar.yml` corre el **día 25 de cada mes a las 06:00 UTC**
+(también a mano desde la pestaña Actions):
+
+1. Descarga de la PLACSP **solo el ejercicio en curso**. Los años cerrados se
+   reutilizan desde `_raw/cache/`, que sí está versionado —unos 22 MB—. Sin ese
+   atajo habría que bajar 11 GB en cada pasada.
+2. Extrae los expedientes de Marbella, reconstruye `observatorio/data/data.js`.
+3. **Comprueba con Playwright que todas las gráficas pintan.** Si alguna sale
+   vacía, la ejecución falla y no se publica nada.
+4. Si la Plataforma no ha publicado nada nuevo, no toca el repositorio.
+
+Para redescargar años concretos: Actions → *Actualizar observatorio* → *Run
+workflow* → `anios: 2024,2025,2026`.
 
 ---
 
@@ -55,29 +58,25 @@ expediente mayor del buscador enlaza a su ficha en la Plataforma.
 |---|---|
 | `observatorio/` | El panel. Chasis del kit en `assets/`, declaración en `app.js`, datos en `data/data.js`. |
 | `index.html` | Redirección a `observatorio/` para GitHub Pages. |
-| `csv/` | Un CSV por año de los contratos mayores más el consolidado `contratos_marbella_completo.csv`. Separador `;` y BOM: se abren en Excel con doble clic. |
-| `contratos_marbella.json` | Contratos mayores con todo el detalle, incluidas las adjudicaciones lote a lote. |
-| `menores_marbella.json` | Contratos menores: totales certificados por el Ayuntamiento y listado de detalle. |
+| `csv/` | Un CSV por año y clase, más el consolidado `contratos_marbella_completo.csv`. Separador `;` y BOM: se abren en Excel con doble clic. |
+| `contratos_marbella.json` | Todos los expedientes con su detalle, incluidas las adjudicaciones lote a lote. |
+| `_raw/cache/` | El resultado de barrer cada ZIP anual. Versionado a propósito: es lo que hace barata la actualización mensual. |
 | `_scripts/` | El pipeline. |
-
-Los ZIP anuales descargados de la PLACSP (`_raw/`, varios GB) y las capturas de
-verificación no se versionan: se regeneran con el pipeline.
 
 ## El pipeline, en orden
 
 ```bash
-python _scripts/download_placsp.py      # 1. descarga los ZIP anuales (reanudable)
+python _scripts/download_placsp.py      # 1. ZIP anuales (reanudable; PLACSP_YEARS acota los años)
 python _scripts/codigos.py              # 2. listas de códigos CODICE (tipos, CPV…)
-python _scripts/extraer_marbella.py     # 3. MAYORES: filtra Marbella -> JSON + CSV
-python _scripts/menores_ayto.py         # 4. MENORES: lee los listados del Ayuntamiento
-python _scripts/build_data.py           # 5. agrega -> observatorio/data/data.js
-python _scripts/empaquetar_html.py      # 6. empaqueta el HTML único
-python _scripts/verificar.py            # 7. comprueba que TODAS las gráficas pintan
+python _scripts/extraer_marbella.py     # 3. filtra Marbella -> JSON + CSV
+python _scripts/build_data.py           # 4. agrega -> observatorio/data/data.js
+python _scripts/verificar.py            # 5. comprueba que TODAS las gráficas pintan
 ```
 
 Los pasos 1 y 3 son incrementales: el descargador salta los ZIP ya presentes y
-válidos, y el extractor cachea el resultado de cada ZIP contra su tamaño y
-fecha. Añadir un año nuevo cuesta minutos, no la descarga entera.
+válidos, y el extractor cachea el resultado de cada ZIP. Un ZIP ausente cuya
+caché existe se da por bueno, que es lo que permite correr el pipeline en un
+runner sin los 11 GB.
 
 ## Cómo se selecciona "Marbella"
 
@@ -104,24 +103,10 @@ lotes, enlace a la ficha de la Plataforma y **una entrada por adjudicación**
 con lote, resultado, fecha, número de ofertas recibidas, ofertas de PYME,
 adjudicatario, NIF e importe.
 
-## Los contratos menores, en detalle
-
-Los listados municipales traen **dos cosas que no cuadran entre sí**:
-
-- Una tabla de **totales certificados** por año, tipo y trimestre (2021-2025).
-- Un **listado contrato a contrato** (2020-2025), volcado desde PDF, con líneas
-  partidas y repetidas: da entre un 5 % y un 10 % más de filas e importe que el
-  total certificado del mismo año.
-
-El observatorio no promedia esa diferencia ni elige en silencio: las **gráficas
-agregadas usan el total certificado** y el **buscador usa el detalle**, y la
-propia sección de menores lo advierte. Para 2020 no hay total certificado, así
-que ese año se agrega desde el detalle.
-
 ## Limitaciones que hay que decir al cliente
 
-- El observatorio refleja **lo publicado**. Un expediente tramitado y no
-  publicado no aparece.
+- El observatorio refleja **lo publicado en la Plataforma**. Un expediente
+  tramitado y no publicado no aparece.
 - Los indicadores de competencia (ofertas por licitación, adjudicaciones con
   una sola oferta) se calculan solo sobre los expedientes en los que el órgano
   de contratación rellenó ese campo, que no son todos.
@@ -136,4 +121,3 @@ que ese año se agrega desde el detalle.
 ---
 
 Consultoría **AMMA Consulting** para el Ayuntamiento de Marbella · Marbella DTI.
-Todos los datos proceden de fuentes públicas oficiales, enlazadas arriba.

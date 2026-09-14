@@ -16,7 +16,15 @@ FEEDS = {
     "licitaciones": ("sindicacion_643", "licitacionesPerfilesContratanteCompleto3"),
     "menores": ("sindicacion_1143", "contratosMenoresPerfilesContratantes"),
 }
-YEARS = list(range(2015, 2027))
+# En local se bajan todos los anos; la actualizacion mensual solo necesita el
+# ejercicio en curso (y el anterior mientras se sigue adjudicando), asi que se
+# puede acotar con PLACSP_YEARS=2025,2026.
+import datetime
+import os
+
+_env = os.environ.get("PLACSP_YEARS", "").strip()
+YEARS = ([int(y) for y in _env.replace(";", ",").split(",") if y.strip()]
+         if _env else list(range(2015, datetime.date.today().year + 1)))
 RAW = pathlib.Path(__file__).resolve().parent.parent / "_raw"
 RAW.mkdir(parents=True, exist_ok=True)
 

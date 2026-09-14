@@ -14,6 +14,11 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 URL = (ROOT / "observatorio" / "index.html").as_uri()
 SHOTS = ROOT / "_capturas"
+
+# En local se usa el Chrome instalado (las versiones de los navegadores de
+# Playwright no casan); en un runner solo esta el chromium que trae Playwright.
+import os
+LANZAR = {} if os.environ.get("CI") else {"channel": "chrome"}
 SHOTS.mkdir(exist_ok=True)
 
 # Las secciones ya pintadas siguen en el DOM (solo se ocultan), asi que el
@@ -34,7 +39,7 @@ SECS = ["panorama", "mayores", "menores", "materias", "empresas", "competencia",
 fallos = []
 
 with sync_playwright() as p:
-    nav = p.chromium.launch(channel="chrome")
+    nav = p.chromium.launch(**LANZAR)
     for tema in ("light", "dark"):
         ctx = nav.new_context(viewport={"width": 1440, "height": 1000}, color_scheme=tema)
         pg = ctx.new_page()

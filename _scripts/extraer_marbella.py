@@ -236,21 +236,34 @@ CACHE.mkdir(exist_ok=True)
 registros = {}
 stats = defaultdict(int)
 
-zips = sorted(RAW.glob("*.zip"))
-print(f"{len(zips)} ficheros ZIP a procesar\n")
+# La actualizacion mensual no arrastra los ZIP de los anos cerrados: solo
+# descarga el ejercicio en curso. Por eso se procesa la UNION de los ZIP
+# presentes y de las caches guardadas; una cache sin su ZIP se da por buena,
+# que es justo lo que permite que esto corra en un runner sin 11 GB.
+zips = {zp.stem: zp for zp in sorted(RAW.glob("*.zip"))}
+solo_cache = sorted(cf.stem for cf in CACHE.glob("*.json") if cf.stem not in zips)
+unidades = sorted(zips) + solo_cache
+print(f"{len(zips)} ZIP presentes + {len(solo_cache)} solo en cache = {len(unidades)} a procesar" + chr(10))
 
-for zp in zips:
-    st = zp.stat()
-    huella = f"{st.st_size}-{int(st.st_mtime)}"
-    cf = CACHE / f"{zp.stem}.json"
+for nombre in unidades:
+    zp = zips.get(nombre)
+    cf = CACHE / f"{nombre}.json"
+    huella = None
+    if zp is not None:
+        st = zp.stat()
+        huella = f"{st.st_size}-{int(st.st_mtime)}"
     hallados = None
     if cf.exists():
         try:
             guardado = json.loads(cf.read_text(encoding="utf-8"))
-            if guardado.get("huella") == huella:
+            # Sin ZIP no hay huella que comparar: la cache es la unica verdad.
+            if zp is None or guardado.get("huella") == huella:
                 hallados = guardado["registros"]
         except (json.JSONDecodeError, KeyError):
             pass
+    if hallados is None and zp is None:
+        print(f"  {nombre:32s} -> cache ilegible y sin ZIP: SE OMITE")
+        continue
     marca = "cache" if hallados is not None else "leido"
     if hallados is None:
         hallados, errores = barrer_zip(zp)
@@ -274,8 +287,9 @@ for zp in zips:
             registros[k] = r
         else:
             prev["primer_anio_fichero"] = min(prev["primer_anio_fichero"], r["primer_anio_fichero"])
-    stats[zp.name] = len(hallados)
-    print(f"  {zp.name:32s} -> {len(hallados):6d} coincidencias  ({marca})")
+    stats[nombre] = len(hallados)
+    marca = marca if zp is not None else "cache sin ZIP"
+    print(f"  {nombre:32s} -> {len(hallados):6d} coincidencias  ({marca})")
 
 # --- anio de referencia del expediente ---
 for r in registros.values():
