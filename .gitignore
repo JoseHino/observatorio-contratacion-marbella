@@ -1,0 +1,4 @@
+_raw/
+_capturas/
+*.log
+__pycache__/
